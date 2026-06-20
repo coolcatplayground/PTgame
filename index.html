@@ -35,6 +35,8 @@
     border-radius: 8px;
     padding: 12px 16px;
     margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 10px;
   }
   .energy-count {
     font-size: 1.6rem;
@@ -67,6 +69,7 @@
   .plant-display {
     text-align: center;
     padding: 20px 0;
+    position: relative;
   }
   .plant-emoji {
     font-size: 5rem;
@@ -206,6 +209,7 @@
     gap: 4px;
     margin-top: 12px;
     flex-wrap: wrap;
+    justify-content: center;
   }
   .stage-dot {
     font-size: 1.3rem;
@@ -232,7 +236,7 @@
     margin-top: 10px;
   }
   .float-num {
-    position: absolute;
+    position: fixed;
     color: #5a9c4a;
     font-weight: bold;
     font-size: 0.9rem;
@@ -243,7 +247,38 @@
     0% { opacity: 1; transform: translateY(0); }
     100% { opacity: 0; transform: translateY(-40px); }
   }
-  .plant-display { position: relative; }
+  .clade-choice-card {
+    border: 2px solid #d8e0d2;
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .clade-choice-card:hover {
+    border-color: #5a9c4a;
+    background: #f5faf2;
+  }
+  .clade-choice-card .clade-title {
+    font-weight: bold;
+    font-size: 1rem;
+    margin-bottom: 4px;
+  }
+  .clade-choice-card .clade-fact {
+    font-size: 0.8rem;
+    color: #5a6b54;
+    line-height: 1.4;
+  }
+  .clade-badge {
+    display: inline-block;
+    background: #5a9c4a;
+    color: white;
+    font-size: 0.7rem;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 6px;
+  }
 </style>
 </head>
 <body>
@@ -311,6 +346,12 @@
     </div>
   </div>
 
+  <div class="panel" id="cladeChoicePanel" style="margin-top:16px; display:none;">
+    <h2>🔱 Choose Your Lineage's Specialization</h2>
+    <div class="gen-detail" style="margin-bottom:10px;">Your plant has reached Flowering Plant. Real flowering plants split into three major groups — pick one to specialize into for this run. The other two remain available next time you prestige.</div>
+    <div id="cladeChoiceList"></div>
+  </div>
+
   <div class="panel" style="margin-top:16px;">
     <h2>🔬 Speculative Evolution Branches <span style="font-size:0.7rem; color:#8a7a3a; font-weight:normal;">(imaginative, not real science)</span></h2>
     <div id="branchList"></div>
@@ -322,7 +363,7 @@
 // ============================================================
 // GAME STATE
 // ============================================================
-const SAVE_KEY = "plantEvolutionSave_v1";
+const SAVE_KEY = "plantEvolutionSave_v2"; // bumped: v1 saves predate clade branching
 
 let state = {
   light: 0,
@@ -331,13 +372,16 @@ let state = {
   totalWaterEarned: 0,
   clickPower: 1,
   waterClickPower: 1,
-  generators: {},      // id -> count owned
-  branchesOwned: {},   // id -> true
-  currentStageIndex: 0,
+  generators: {},        // id -> count owned
+  branchesOwned: {},      // id -> true (permanent, survives prestige)
+  currentStageIndex: 0,   // trunk stage progress (STAGES array)
+  chosenCladeId: null,    // null until player picks Eudicots/Monocots/Magnoliids
+  familyStageIndex: -1,   // progress within chosen clade's familyStages; -1 = not yet in a clade
+  cladesCompleted: {},    // cladeId -> true, PERMANENT, survives prestige (for completion perks)
   lastFactSeen: null,
-  lastSavedAt: Date.now(), // used to calculate offline progress on next load
-  resiliencePoints: 0,     // permanent prestige currency, survives resets
-  prestigeCount: 0         // how many times the player has prestiged
+  lastSavedAt: Date.now(),
+  resiliencePoints: 0,    // permanent prestige currency, survives resets
+  prestigeCount: 0
 };
 
 GENERATORS.forEach(g => state.generators[g.id] = 0);
@@ -360,9 +404,7 @@ function loadGame() {
     if (raw) {
       const loaded = JSON.parse(raw);
       state = Object.assign(state, loaded);
-      // ensure all generator/branch keys exist even if new ones were added since last save
       GENERATORS.forEach(g => { if (!(g.id in state.generators)) state.generators[g.id] = 0; });
-
       applyOfflineProgress();
     }
   } catch (e) {
@@ -393,7 +435,7 @@ function applyOfflineProgress() {
 }
 
 // ============================================================
-// DERIVED VALUES
+// DERIVED VALUES — trunk stage
 // ============================================================
 function getCurrentStage() {
   return STAGES[state.currentStageIndex];
@@ -403,6 +445,41 @@ function getNextStage() {
   return STAGES[state.currentStageIndex + 1] || null;
 }
 
+function isAtForkPoint() {
+  // Player has finished the trunk path but hasn't chosen a clade yet.
+  const forkIndex = STAGES.findIndex(s => s.id === FORK_AFTER_STAGE_ID);
+  return state.currentStageIndex >= forkIndex && !state.chosenCladeId;
+}
+
+// ============================================================
+// DERIVED VALUES — clade / family stage
+// ============================================================
+function getChosenClade() {
+  if (!state.chosenCladeId) return null;
+  return CLADES.find(c => c.id === state.chosenCladeId) || null;
+}
+
+function getCurrentFamilyStage() {
+  const clade = getChosenClade();
+  if (!clade || state.familyStageIndex < 0) return null;
+  return clade.familyStages[state.familyStageIndex] || null;
+}
+
+function getNextFamilyStage() {
+  const clade = getChosenClade();
+  if (!clade) return null;
+  return clade.familyStages[state.familyStageIndex + 1] || null;
+}
+
+function isCladeComplete(cladeId) {
+  const clade = CLADES.find(c => c.id === cladeId);
+  if (!clade) return false;
+  return state.chosenCladeId === cladeId && state.familyStageIndex >= clade.familyStages.length - 1;
+}
+
+// ============================================================
+// DERIVED VALUES — costs & production
+// ============================================================
 function getGenCost(gen) {
   const owned = state.generators[gen.id];
   return Math.ceil(gen.baseCost * Math.pow(1.15, owned));
@@ -436,10 +513,29 @@ function getSynergyMultiplier(gen) {
   return 1 + (unlockedCount * gen.synergyBonusPerStage);
 }
 
+// A generator is "owned-eligible" (counts toward production) if it's a trunk
+// generator OR it belongs to the clade the player has currently chosen.
+// If the player prestiges and picks a DIFFERENT clade, generators from the
+// previous clade simply sit at their reset count of 0 (see doPrestige) so
+// this distinction mostly matters for the unlock/visibility check below.
+function isGeneratorUnlocked(gen) {
+  if (gen.cladeId) {
+    return state.chosenCladeId === gen.cladeId &&
+      getFamilyStageIndexById(gen.cladeId, gen.unlockFamilyStage) <= state.familyStageIndex;
+  }
+  return state.currentStageIndex >= gen.unlockStage;
+}
+
+function getFamilyStageIndexById(cladeId, familyStageId) {
+  const clade = CLADES.find(c => c.id === cladeId);
+  if (!clade) return Infinity;
+  return clade.familyStages.findIndex(f => f.id === familyStageId);
+}
+
 function getLightPerSecond() {
   let total = 0;
   GENERATORS.forEach(g => {
-    if (g.produces === "light") {
+    if (g.produces === "light" && isGeneratorUnlocked(g)) {
       total += g.baseProduction * state.generators[g.id] * getSynergyMultiplier(g);
     }
   });
@@ -449,7 +545,7 @@ function getLightPerSecond() {
 function getWaterPerSecond() {
   let total = 0;
   GENERATORS.forEach(g => {
-    if (g.produces === "water") {
+    if (g.produces === "water" && isGeneratorUnlocked(g)) {
       total += g.baseProduction * state.generators[g.id] * getSynergyMultiplier(g);
     }
   });
@@ -471,6 +567,21 @@ function getPotentialResiliencePoints() {
   const totalProgress = state.totalLightEarned + state.totalWaterEarned;
   if (totalProgress <= 0) return 0;
   return Math.floor(Math.pow(totalProgress, PRESTIGE_CONFIG.exponent) / PRESTIGE_CONFIG.divisor);
+}
+
+// Is this speculative branch's requirement satisfied right now (or already owned)?
+function isBranchUnlocked(branch) {
+  if (state.branchesOwned[branch.id]) return true; // owned branches always stay visible/active
+  if (branch.requiresStage) {
+    const idx = STAGES.findIndex(s => s.id === branch.requiresStage);
+    return state.currentStageIndex >= idx;
+  }
+  if (branch.requiresClade) {
+    if (state.chosenCladeId !== branch.requiresClade) return false;
+    const idx = getFamilyStageIndexById(branch.requiresClade, branch.requiresFamilyStage);
+    return state.familyStageIndex >= idx;
+  }
+  return false;
 }
 
 // ============================================================
@@ -497,6 +608,7 @@ function clickWater(evt) {
 
 function buyGenerator(genId) {
   const gen = GENERATORS.find(g => g.id === genId);
+  if (!isGeneratorUnlocked(gen)) return;
   if (canAffordGenerator(gen)) {
     state.light -= getGenCost(gen);
     state.water -= getGenWaterCost(gen);
@@ -508,8 +620,9 @@ function buyGenerator(genId) {
 
 function buyBranch(branchId) {
   const branch = SPECULATIVE_BRANCHES.find(b => b.id === branchId);
+  if (!isBranchUnlocked(branch) || state.branchesOwned[branchId]) return;
   const waterCost = branch.costWater || 0;
-  if (state.light >= branch.cost && state.water >= waterCost && !state.branchesOwned[branchId]) {
+  if (state.light >= branch.cost && state.water >= waterCost) {
     state.light -= branch.cost;
     state.water -= waterCost;
     state.branchesOwned[branchId] = true;
@@ -519,6 +632,26 @@ function buyBranch(branchId) {
   }
 }
 
+function chooseClade(cladeId) {
+  if (!isAtForkPoint()) return;
+  const clade = CLADES.find(c => c.id === cladeId);
+  if (!clade) return;
+
+  state.chosenCladeId = cladeId;
+  state.familyStageIndex = 0;
+
+  // Apply permanent completion perk if this clade was fully finished before.
+  const perk = CLADE_COMPLETION_PERKS[cladeId];
+  if (perk && state.cladesCompleted[cladeId]) {
+    state.generators[perk.freeGeneratorId] = (state.generators[perk.freeGeneratorId] || 0) + perk.freeGeneratorCount;
+    showToast(`🧬 Genetic memory: starting with ${perk.freeGeneratorCount} free ${GENERATORS.find(g=>g.id===perk.freeGeneratorId).name} (from completing ${clade.name} before).`);
+  }
+
+  showToast(`🔱 Specialized into ${clade.name}! ${clade.shortFact}`);
+  renderAll();
+  saveGame();
+}
+
 function doPrestige() {
   if (!isPrestigeUnlocked()) return;
   const gained = getPotentialResiliencePoints();
@@ -526,22 +659,27 @@ function doPrestige() {
     showToast("Not enough progress yet to gain Resilience Points from an extinction event.");
     return;
   }
-  if (!confirm(`Trigger a Mass Extinction Event?\n\nThis resets your current plant, all generators, Light, and Water back to the start.\n\nSpeculative Evolution Branches you've already unlocked are PERMANENT and carry forward.\n\nYou will permanently gain ${gained} Resilience Points (+${(gained * PRESTIGE_CONFIG.multiplierPerPoint * 100).toFixed(0)}% production, forever).\n\nThis cannot be undone.`)) {
+  if (!confirm(`Trigger a Mass Extinction Event?\n\nThis resets your current plant, all generators, Light, Water, and clade choice back to the start.\n\nSpeculative Evolution Branches you've already unlocked are PERMANENT and carry forward.\n\nYou will permanently gain ${gained} Resilience Points (+${(gained * PRESTIGE_CONFIG.multiplierPerPoint * 100).toFixed(0)}% production, forever).\n\nThis cannot be undone.`)) {
     return;
+  }
+
+  // Record clade completion permanently BEFORE resetting, if applicable.
+  if (state.chosenCladeId && isCladeComplete(state.chosenCladeId)) {
+    state.cladesCompleted[state.chosenCladeId] = true;
   }
 
   state.resiliencePoints += gained;
   state.prestigeCount += 1;
 
-  // Reset run-specific progress, keep permanent prestige fields.
-  // NOTE: branchesOwned is intentionally NOT reset — speculative branches,
-  // once unlocked, persist across every future Mass Extinction Event,
-  // same as Resilience Points.
+  // Reset run-specific progress, keep permanent prestige fields
+  // (resiliencePoints, prestigeCount, cladesCompleted, branchesOwned).
   state.light = 0;
   state.totalLightEarned = 0;
   state.water = 0;
   state.totalWaterEarned = 0;
   state.currentStageIndex = 0;
+  state.chosenCladeId = null;
+  state.familyStageIndex = -1;
   GENERATORS.forEach(g => state.generators[g.id] = 0);
 
   renderAll();
@@ -550,16 +688,32 @@ function doPrestige() {
 }
 
 function checkStageProgress() {
-  const next = getNextStage();
-  if (next && state.totalLightEarned >= next.threshold) {
-    state.currentStageIndex++;
-    showToast(`🎉 Evolved into ${next.name}! ${next.fact}`);
+  // Trunk progression (before the fork).
+  if (!state.chosenCladeId) {
+    const next = getNextStage();
+    if (next && state.totalLightEarned >= next.threshold) {
+      state.currentStageIndex++;
+      showToast(`🎉 Evolved into ${next.name}! ${next.fact}`);
+      renderAll();
+    }
+    return;
+  }
+
+  // Family-stage progression (after the fork, within chosen clade).
+  const nextFamily = getNextFamilyStage();
+  if (nextFamily && state.totalLightEarned >= nextFamily.threshold) {
+    state.familyStageIndex++;
+    const justCompleted = isCladeComplete(state.chosenCladeId);
+    showToast(`🎉 Evolved into ${nextFamily.name}! ${nextFamily.fact}`);
+    if (justCompleted && !state.cladesCompleted[state.chosenCladeId]) {
+      showToast(`🏆 ${getChosenClade().name} lineage complete! Future runs choosing this clade again will get a permanent head start.`);
+    }
     renderAll();
   }
 }
 
 function resetGame() {
-  if (confirm("Reset ALL progress, including permanent Resilience Points? This cannot be undone.")) {
+  if (confirm("Reset ALL progress, including permanent Resilience Points and clade completions? This cannot be undone.")) {
     localStorage.removeItem(SAVE_KEY);
     location.reload();
   }
@@ -591,6 +745,50 @@ function renderTopBar() {
 }
 
 function renderPlant() {
+  const cladeChoicePanel = document.getElementById("cladeChoicePanel");
+
+  if (isAtForkPoint()) {
+    // Show the fork choice instead of normal plant progress.
+    cladeChoicePanel.style.display = "block";
+    document.getElementById("plantEmoji").textContent = "🌸";
+    document.getElementById("plantName").textContent = "Flowering Plant — choose your path below";
+    document.getElementById("factText").textContent = STAGES.find(s => s.id === FORK_AFTER_STAGE_ID).fact;
+    document.getElementById("progressBar").style.width = "100%";
+    document.getElementById("progressLabel").textContent = "Ready to specialize — pick a lineage below.";
+    renderStageTrack();
+    renderCladeChoice();
+    return;
+  }
+
+  cladeChoicePanel.style.display = "none";
+
+  if (state.chosenCladeId) {
+    // Post-fork: show family stage within chosen clade.
+    const clade = getChosenClade();
+    const stage = getCurrentFamilyStage();
+    document.getElementById("plantEmoji").textContent = stage.emoji;
+    document.getElementById("plantName").textContent = `${clade.emoji} ${stage.name}`;
+    document.getElementById("factText").textContent = stage.fact;
+
+    const next = getNextFamilyStage();
+    const progressBar = document.getElementById("progressBar");
+    const progressLabel = document.getElementById("progressLabel");
+    if (next) {
+      const prevThreshold = stage.threshold;
+      const range = next.threshold - prevThreshold;
+      const progressed = state.totalLightEarned - prevThreshold;
+      const pct = Math.max(0, Math.min(100, (progressed / range) * 100));
+      progressBar.style.width = pct + "%";
+      progressLabel.textContent = `${formatNum(state.totalLightEarned)} / ${formatNum(next.threshold)} toward ${next.name}`;
+    } else {
+      progressBar.style.width = "100%";
+      progressLabel.textContent = `${clade.name} lineage complete — for now.`;
+    }
+    renderStageTrack();
+    return;
+  }
+
+  // Pre-fork: normal trunk stage display.
   const stage = getCurrentStage();
   document.getElementById("plantEmoji").textContent = stage.emoji;
   document.getElementById("plantName").textContent = stage.name;
@@ -608,17 +806,60 @@ function renderPlant() {
     progressLabel.textContent = `${formatNum(state.totalLightEarned)} / ${formatNum(next.threshold)} toward ${next.name}`;
   } else {
     progressBar.style.width = "100%";
-    progressLabel.textContent = "Maximum evolution reached — for now.";
+    progressLabel.textContent = "Ready to specialize.";
   }
+  renderStageTrack();
+}
 
+function renderStageTrack() {
   const track = document.getElementById("stageTrack");
   track.innerHTML = "";
+
+  // Trunk stages always shown.
   STAGES.forEach((s, i) => {
     const dot = document.createElement("div");
-    dot.className = "stage-dot" + (i <= state.currentStageIndex ? " reached" : "") + (i === state.currentStageIndex ? " current" : "");
+    const reached = i <= state.currentStageIndex;
+    const isCurrent = i === state.currentStageIndex && !state.chosenCladeId;
+    dot.className = "stage-dot" + (reached ? " reached" : "") + (isCurrent ? " current" : "");
     dot.textContent = s.emoji;
     dot.title = s.name;
     track.appendChild(dot);
+  });
+
+  // If a clade is chosen, append its family stages to the track too.
+  if (state.chosenCladeId) {
+    const clade = getChosenClade();
+    const sep = document.createElement("div");
+    sep.textContent = "→";
+    sep.style.opacity = "0.4";
+    sep.style.padding = "4px 2px";
+    track.appendChild(sep);
+
+    clade.familyStages.forEach((f, i) => {
+      const dot = document.createElement("div");
+      const reached = i <= state.familyStageIndex;
+      const isCurrent = i === state.familyStageIndex;
+      dot.className = "stage-dot" + (reached ? " reached" : "") + (isCurrent ? " current" : "");
+      dot.textContent = f.emoji;
+      dot.title = f.name;
+      track.appendChild(dot);
+    });
+  }
+}
+
+function renderCladeChoice() {
+  const list = document.getElementById("cladeChoiceList");
+  list.innerHTML = "";
+  CLADES.forEach(clade => {
+    const completedBefore = !!state.cladesCompleted[clade.id];
+    const card = document.createElement("div");
+    card.className = "clade-choice-card";
+    card.innerHTML = `
+      <div class="clade-title">${clade.emoji} ${clade.name}${completedBefore ? '<span class="clade-badge">✓ Completed before — head start!</span>' : ''}</div>
+      <div class="clade-fact">${clade.shortFact}</div>
+    `;
+    card.addEventListener("click", () => chooseClade(clade.id));
+    list.appendChild(card);
   });
 }
 
@@ -626,7 +867,12 @@ function renderGenerators() {
   const list = document.getElementById("generatorList");
   list.innerHTML = "";
   GENERATORS.forEach(gen => {
-    const unlocked = state.currentStageIndex >= gen.unlockStage;
+    const unlocked = isGeneratorUnlocked(gen);
+    // Hide clade generators entirely if they belong to a clade the player
+    // hasn't chosen this run (avoids showing 6+ permanently-locked entries
+    // for the two unchosen clades).
+    if (gen.cladeId && state.chosenCladeId !== gen.cladeId) return;
+
     const lightCost = getGenCost(gen);
     const waterCost = getGenWaterCost(gen);
     const owned = state.generators[gen.id];
@@ -646,12 +892,23 @@ function renderGenerators() {
       ? `${formatNum(lightCost)} ☀️ + ${formatNum(waterCost)} 💧`
       : `${formatNum(lightCost)} ☀️`;
 
+    let lockedHint = "";
+    if (!unlocked) {
+      if (gen.cladeId) {
+        const clade = CLADES.find(c => c.id === gen.cladeId);
+        const familyStage = clade.familyStages.find(f => f.id === gen.unlockFamilyStage);
+        lockedHint = `Reach: ${familyStage.name}`;
+      } else {
+        lockedHint = `Reach stage: ${STAGES[gen.unlockStage].name}`;
+      }
+    }
+
     item.innerHTML = `
       <div class="gen-info">
         <div class="gen-emoji">${gen.emoji}</div>
         <div>
           <div class="gen-name">${unlocked ? gen.name : "??? (locked)"}</div>
-          <div class="gen-detail">${unlocked ? `Owned: ${owned} · +${formatNum(effectiveProduction)} ${resourceIcon}/sec each${synergyNote}` : `Reach stage: ${STAGES[gen.unlockStage].name}`}</div>
+          <div class="gen-detail">${unlocked ? `Owned: ${owned} · +${formatNum(effectiveProduction)} ${resourceIcon}/sec each${synergyNote}` : lockedHint}</div>
         </div>
       </div>
       ${unlocked ? `<button class="buy-btn" data-gen="${gen.id}" ${canAfford ? "" : "disabled"}>${costLabel}</button>` : ""}
@@ -668,11 +925,8 @@ function renderBranches() {
   const list = document.getElementById("branchList");
   list.innerHTML = "";
   SPECULATIVE_BRANCHES.forEach(branch => {
-    const reqStageIndex = STAGES.findIndex(s => s.id === branch.requiresStage);
     const owned = !!state.branchesOwned[branch.id];
-    // Owned branches stay visible/active forever, even after a prestige reset
-    // drops currentStageIndex below their original unlock requirement.
-    const unlocked = owned || state.currentStageIndex >= reqStageIndex;
+    const unlocked = isBranchUnlocked(branch);
     const waterCost = branch.costWater || 0;
     const canAfford = state.light >= branch.cost && state.water >= waterCost;
 
@@ -685,6 +939,17 @@ function renderBranches() {
       ? `${formatNum(branch.cost)} ☀️ + ${formatNum(waterCost)} 💧`
       : `${formatNum(branch.cost)} ☀️`;
 
+    let lockedHint = "";
+    if (!unlocked) {
+      if (branch.requiresStage) {
+        lockedHint = `Reach stage: ${STAGES.find(s => s.id === branch.requiresStage).name}`;
+      } else if (branch.requiresClade) {
+        const clade = CLADES.find(c => c.id === branch.requiresClade);
+        const familyStage = clade.familyStages.find(f => f.id === branch.requiresFamilyStage);
+        lockedHint = `Reach: ${familyStage.name} (${clade.name} lineage)`;
+      }
+    }
+
     const item = document.createElement("div");
     item.className = "branch-item" + (unlocked ? "" : " locked");
 
@@ -694,7 +959,7 @@ function renderBranches() {
         <div>
           <span class="branch-tag" style="background:${tagColor};">${tagLabel}</span>
           <div class="gen-name">${unlocked ? branch.name : "??? (locked)"}</div>
-          <div class="gen-detail">${unlocked ? branch.description : `Reach stage: ${STAGES[reqStageIndex].name}`}</div>
+          <div class="gen-detail">${unlocked ? branch.description : lockedHint}</div>
           ${unlocked ? `<div class="gen-detail"><em>${branch.effect}</em></div>` : ""}
           ${owned ? `<div class="gen-detail" style="color:#5a9c4a;">Permanent — survives Mass Extinction Events</div>` : ""}
         </div>
@@ -724,9 +989,15 @@ function renderPrestige() {
   }
 
   const potential = getPotentialResiliencePoints();
+  const completedClades = Object.keys(state.cladesCompleted).filter(id => state.cladesCompleted[id]);
+  const completedNote = completedClades.length > 0
+    ? `<div class="gen-detail" style="margin-bottom:8px; color:#5a9c4a;">Lineages completed so far: ${completedClades.map(id => CLADES.find(c=>c.id===id).name).join(", ")}</div>`
+    : "";
+
   panel.innerHTML = `
     <div class="gen-detail" style="margin-bottom:8px;">${PRESTIGE_CONFIG.fact}</div>
-    <div class="gen-detail" style="margin-bottom:8px;">Triggering this resets your current Light, Water, generators, and branches back to the start — but permanently increases all future production.</div>
+    <div class="gen-detail" style="margin-bottom:8px;">Triggering this resets your current Light, Water, generators, and clade choice back to the start — but permanently increases all future production. Speculative branches and clade completions are never lost.</div>
+    ${completedNote}
     <div class="gen-detail" style="margin-bottom:10px;">Resetting now would grant: <strong>+${potential} Resilience Points</strong> (currently have ${state.resiliencePoints})</div>
     <button class="buy-btn" id="prestigeBtn" style="background:#8a4a4a;">🌋 Trigger Mass Extinction Event</button>
   `;
@@ -756,7 +1027,6 @@ function showFloatingNumber(evt, text) {
   const rect = evt.target.getBoundingClientRect();
   num.style.left = (rect.left + rect.width / 2 - 10) + "px";
   num.style.top = (rect.top - 10) + "px";
-  num.style.position = "fixed";
   document.body.appendChild(num);
   setTimeout(() => num.remove(), 800);
 }
@@ -801,13 +1071,11 @@ function init() {
   });
 
   setInterval(tick, 100);
-  setInterval(() => { renderGenerators(); renderBranches(); renderPrestige(); }, 500); // refresh affordability/locks
+  setInterval(() => { renderGenerators(); renderBranches(); renderPrestige(); }, 500);
   setInterval(saveGame, 5000);
 
   window.addEventListener("beforeunload", saveGame);
 
-  // When tab regains focus/visibility, the interval may have been throttled
-  // while hidden — catch up on any time that passed since the last tick.
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       applyOfflineProgress();
