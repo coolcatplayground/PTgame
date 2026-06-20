@@ -267,6 +267,21 @@
     </div>
   </div>
 
+  <div style="display:flex; justify-content:flex-end; align-items:center; gap:6px; margin-bottom:12px; font-size:0.75rem; color:#8a8a7a;">
+    <label for="debugSpeedSelect">🛠️ Debug speed (testing only):</label>
+    <select id="debugSpeedSelect" style="font-size:0.75rem; padding:2px 4px;">
+      <option value="1">1x (normal)</option>
+      <option value="10">10x</option>
+      <option value="100">100x</option>
+      <option value="1000">1000x</option>
+    </select>
+  </div>
+
+  <div class="panel" id="prestigePanelWrapper" style="margin-bottom:16px; border-color:#c8a8a8; background:#fdf6f6;">
+    <h2 style="margin-bottom:8px;">🌋 Mass Extinction Event <span style="font-size:0.7rem; color:#8a4a4a; font-weight:normal;">(prestige / permanent bonus)</span></h2>
+    <div id="prestigePanel"></div>
+  </div>
+
   <div class="main-grid">
     <div class="panel">
       <h2>Your Plant</h2>
@@ -299,11 +314,6 @@
   <div class="panel" style="margin-top:16px;">
     <h2>🔬 Speculative Evolution Branches <span style="font-size:0.7rem; color:#8a7a3a; font-weight:normal;">(imaginative, not real science)</span></h2>
     <div id="branchList"></div>
-  </div>
-
-  <div class="panel" style="margin-top:16px; border-color:#c8a8a8;">
-    <h2>🌋 Mass Extinction Event <span style="font-size:0.7rem; color:#8a4a4a; font-weight:normal;">(prestige / permanent bonus)</span></h2>
-    <div id="prestigePanel"></div>
   </div>
 </div>
 
@@ -516,7 +526,7 @@ function doPrestige() {
     showToast("Not enough progress yet to gain Resilience Points from an extinction event.");
     return;
   }
-  if (!confirm(`Trigger a Mass Extinction Event?\n\nThis resets your current plant, all generators, branches, Light, and Water back to the start.\n\nYou will permanently gain ${gained} Resilience Points (+${(gained * PRESTIGE_CONFIG.multiplierPerPoint * 100).toFixed(0)}% production, forever).\n\nThis cannot be undone.`)) {
+  if (!confirm(`Trigger a Mass Extinction Event?\n\nThis resets your current plant, all generators, Light, and Water back to the start.\n\nSpeculative Evolution Branches you've already unlocked are PERMANENT and carry forward.\n\nYou will permanently gain ${gained} Resilience Points (+${(gained * PRESTIGE_CONFIG.multiplierPerPoint * 100).toFixed(0)}% production, forever).\n\nThis cannot be undone.`)) {
     return;
   }
 
@@ -524,12 +534,14 @@ function doPrestige() {
   state.prestigeCount += 1;
 
   // Reset run-specific progress, keep permanent prestige fields.
+  // NOTE: branchesOwned is intentionally NOT reset — speculative branches,
+  // once unlocked, persist across every future Mass Extinction Event,
+  // same as Resilience Points.
   state.light = 0;
   state.totalLightEarned = 0;
   state.water = 0;
   state.totalWaterEarned = 0;
   state.currentStageIndex = 0;
-  state.branchesOwned = {};
   GENERATORS.forEach(g => state.generators[g.id] = 0);
 
   renderAll();
@@ -657,8 +669,10 @@ function renderBranches() {
   list.innerHTML = "";
   SPECULATIVE_BRANCHES.forEach(branch => {
     const reqStageIndex = STAGES.findIndex(s => s.id === branch.requiresStage);
-    const unlocked = state.currentStageIndex >= reqStageIndex;
     const owned = !!state.branchesOwned[branch.id];
+    // Owned branches stay visible/active forever, even after a prestige reset
+    // drops currentStageIndex below their original unlock requirement.
+    const unlocked = owned || state.currentStageIndex >= reqStageIndex;
     const waterCost = branch.costWater || 0;
     const canAfford = state.light >= branch.cost && state.water >= waterCost;
 
@@ -682,6 +696,7 @@ function renderBranches() {
           <div class="gen-name">${unlocked ? branch.name : "??? (locked)"}</div>
           <div class="gen-detail">${unlocked ? branch.description : `Reach stage: ${STAGES[reqStageIndex].name}`}</div>
           ${unlocked ? `<div class="gen-detail"><em>${branch.effect}</em></div>` : ""}
+          ${owned ? `<div class="gen-detail" style="color:#5a9c4a;">Permanent — survives Mass Extinction Events</div>` : ""}
         </div>
       </div>
       ${unlocked ? (owned
@@ -749,16 +764,18 @@ function showFloatingNumber(evt, text) {
 // ============================================================
 // GAME LOOP
 // ============================================================
+let debugSpeedMultiplier = 1; // testing aid only — scales live tick gains, not offline progress
+
 function tick() {
   const lightPerSecond = getLightPerSecond();
   if (lightPerSecond > 0) {
-    const gained = lightPerSecond / 10; // tick runs at 10x/sec
+    const gained = (lightPerSecond / 10) * debugSpeedMultiplier; // tick runs at 10x/sec
     state.light += gained;
     state.totalLightEarned += gained;
   }
   const waterPerSecond = getWaterPerSecond();
   if (waterPerSecond > 0) {
-    const gainedWater = waterPerSecond / 10;
+    const gainedWater = (waterPerSecond / 10) * debugSpeedMultiplier;
     state.water += gainedWater;
     state.totalWaterEarned += gainedWater;
   }
@@ -779,6 +796,9 @@ function init() {
   document.getElementById("plantEmoji").addEventListener("click", clickPlant);
   document.getElementById("waterDrop").addEventListener("click", clickWater);
   document.getElementById("resetBtn").addEventListener("click", resetGame);
+  document.getElementById("debugSpeedSelect").addEventListener("change", (e) => {
+    debugSpeedMultiplier = parseFloat(e.target.value) || 1;
+  });
 
   setInterval(tick, 100);
   setInterval(() => { renderGenerators(); renderBranches(); renderPrestige(); }, 500); // refresh affordability/locks
