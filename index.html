@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Photosynthesis: An Evolution Clicker</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f0f4ec;
+    margin: 0;
+    padding: 20px;
+    color: #1f2b1a;
+  }
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 1.5rem;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    color: #5a6b54;
+    font-size: 0.9rem;
+    margin-bottom: 16px;
+  }
+  .top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #fff;
+    border: 1px solid #d8e0d2;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+  }
+  .energy-count {
+    font-size: 1.6rem;
+    font-weight: bold;
+  }
+  .energy-rate {
+    font-size: 0.85rem;
+    color: #5a6b54;
+  }
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 700px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+  .panel {
+    background: #fff;
+    border: 1px solid #d8e0d2;
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .panel h2 {
+    font-size: 1.05rem;
+    margin: 0 0 10px 0;
+    border-bottom: 1px solid #e8ede4;
+    padding-bottom: 8px;
+  }
+  .plant-display {
+    text-align: center;
+    padding: 20px 0;
+  }
+  .plant-emoji {
+    font-size: 5rem;
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.08s;
+    display: inline-block;
+  }
+  .plant-emoji:active {
+    transform: scale(0.92);
+  }
+  .plant-name {
+    font-weight: bold;
+    font-size: 1.1rem;
+    margin-top: 8px;
+  }
+  .click-hint {
+    color: #5a6b54;
+    font-size: 0.8rem;
+    margin-top: 4px;
+  }
+  .progress-bar-outer {
+    background: #e8ede4;
+    border-radius: 6px;
+    height: 10px;
+    overflow: hidden;
+    margin-top: 12px;
+  }
+  .progress-bar-inner {
+    background: #5a9c4a;
+    height: 100%;
+    width: 0%;
+    transition: width 0.3s;
+  }
+  .progress-label {
+    font-size: 0.75rem;
+    color: #5a6b54;
+    margin-top: 4px;
+    text-align: center;
+  }
+  .gen-item, .branch-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    border: 1px solid #e8ede4;
+    border-radius: 6px;
+    margin-bottom: 8px;
+  }
+  .gen-item.locked, .branch-item.locked {
+    opacity: 0.4;
+  }
+  .gen-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .gen-emoji {
+    font-size: 1.6rem;
+  }
+  .gen-name {
+    font-weight: 600;
+    font-size: 0.92rem;
+  }
+  .gen-detail {
+    font-size: 0.75rem;
+    color: #5a6b54;
+  }
+  .buy-btn {
+    background: #5a9c4a;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+  .buy-btn:disabled {
+    background: #b9c4b3;
+    cursor: not-allowed;
+  }
+  .branch-item {
+    border-color: #e0d4a8;
+    background: #fdfaf0;
+  }
+  .branch-tag {
+    display: inline-block;
+    background: #e8c468;
+    color: #4a3a0a;
+    font-size: 0.65rem;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-bottom: 4px;
+  }
+  .fact-box {
+    background: #eef5ea;
+    border-left: 4px solid #5a9c4a;
+    padding: 10px 12px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    margin-top: 12px;
+    line-height: 1.4;
+  }
+  .fact-box .fact-label {
+    font-weight: bold;
+    color: #3a6b2a;
+    display: block;
+    margin-bottom: 4px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+  }
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #2d4a24;
+    color: white;
+    padding: 12px 18px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    max-width: 320px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    animation: fadeInOut 4s ease-in-out forwards;
+    z-index: 100;
+  }
+  @keyframes fadeInOut {
+    0% { opacity: 0; transform: translateY(10px); }
+    10% { opacity: 1; transform: translateY(0); }
+    85% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  .stage-track {
+    display: flex;
+    gap: 4px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+  .stage-dot {
+    font-size: 1.3rem;
+    padding: 4px;
+    border-radius: 6px;
+    opacity: 0.3;
+  }
+  .stage-dot.reached {
+    opacity: 1;
+    background: #eef5ea;
+  }
+  .stage-dot.current {
+    background: #d4e8c8;
+    box-shadow: 0 0 0 2px #5a9c4a;
+  }
+  .reset-btn {
+    background: none;
+    border: 1px solid #c8a8a8;
+    color: #8a4a4a;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    margin-top: 10px;
+  }
+  .float-num {
+    position: absolute;
+    color: #5a9c4a;
+    font-weight: bold;
+    font-size: 0.9rem;
+    pointer-events: none;
+    animation: floatUp 0.8s ease-out forwards;
+  }
+  @keyframes floatUp {
+    0% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-40px); }
+  }
+  .plant-display { position: relative; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🌱 Photosynthesis: An Evolution Clicker</h1>
+  <div class="subtitle">Click for light energy. Evolve through 400+ million years of real plant science — and a few imaginative detours.</div>
+
+  <div class="top-bar">
+    <div>
+      <div class="energy-count" id="energyCount">0</div>
+      <div class="energy-rate" id="energyRate">+0 light/sec</div>
+    </div>
+    <button class="reset-btn" id="resetBtn">Reset progress</button>
+  </div>
+
+  <div class="main-grid">
+    <div class="panel">
+      <h2>Your Plant</h2>
+      <div class="plant-display">
+        <div class="plant-emoji" id="plantEmoji">🦠</div>
+        <div class="plant-name" id="plantName">Cyanobacteria</div>
+        <div class="click-hint">Click the plant for light energy</div>
+        <div class="progress-bar-outer">
+          <div class="progress-bar-inner" id="progressBar"></div>
+        </div>
+        <div class="progress-label" id="progressLabel"></div>
+      </div>
+      <div class="stage-track" id="stageTrack"></div>
+      <div class="fact-box" id="factBox">
+        <span class="fact-label">Did you know?</span>
+        <span id="factText"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Generators</h2>
+      <div id="generatorList"></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:16px;">
+    <h2>🔬 Speculative Evolution Branches <span style="font-size:0.7rem; color:#8a7a3a; font-weight:normal;">(imaginative, not real science)</span></h2>
+    <div id="branchList"></div>
+  </div>
+</div>
+
+<script src="gameData.js"></script>
+<script>
+// ============================================================
+// GAME STATE
+// ============================================================
+const SAVE_KEY = "plantEvolutionSave_v1";
+
+let state = {
+  light: 0,
+  totalLightEarned: 0,
+  clickPower: 1,
+  generators: {},      // id -> count owned
+  branchesOwned: {},   // id -> true
+  currentStageIndex: 0,
+  lastFactSeen: null
+};
+
+GENERATORS.forEach(g => state.generators[g.id] = 0);
+
+// ============================================================
+// SAVE / LOAD
+// ============================================================
+function saveGame() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.error("Save failed:", e);
+  }
+}
+
+function loadGame() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) {
+      const loaded = JSON.parse(raw);
+      state = Object.assign(state, loaded);
+      // ensure all generator/branch keys exist even if new ones were added since last save
+      GENERATORS.forEach(g => { if (!(g.id in state.generators)) state.generators[g.id] = 0; });
+    }
+  } catch (e) {
+    console.error("Load failed:", e);
+  }
+}
+
+// ============================================================
+// DERIVED VALUES
+// ============================================================
+function getCurrentStage() {
+  return STAGES[state.currentStageIndex];
+}
+
+function getNextStage() {
+  return STAGES[state.currentStageIndex + 1] || null;
+}
+
+function getGenCost(gen) {
+  const owned = state.generators[gen.id];
+  return Math.ceil(gen.baseCost * Math.pow(1.15, owned));
+}
+
+function getGlobalMultiplier() {
+  let mult = 1;
+  SPECULATIVE_BRANCHES.forEach(b => {
+    if (state.branchesOwned[b.id]) mult *= b.productionMultiplier;
+  });
+  return mult;
+}
+
+function getLightPerSecond() {
+  let total = 0;
+  GENERATORS.forEach(g => {
+    total += g.baseProduction * state.generators[g.id];
+  });
+  return total * getGlobalMultiplier();
+}
+
+// ============================================================
+// ACTIONS
+// ============================================================
+function clickPlant(evt) {
+  const gained = state.clickPower * getGlobalMultiplier();
+  state.light += gained;
+  state.totalLightEarned += gained;
+  checkStageProgress();
+  renderTopBar();
+  showFloatingNumber(evt, "+" + formatNum(gained));
+  saveGame();
+}
+
+function buyGenerator(genId) {
+  const gen = GENERATORS.find(g => g.id === genId);
+  const cost = getGenCost(gen);
+  if (state.light >= cost) {
+    state.light -= cost;
+    state.generators[genId]++;
+    renderAll();
+    saveGame();
+  }
+}
+
+function buyBranch(branchId) {
+  const branch = SPECULATIVE_BRANCHES.find(b => b.id === branchId);
+  if (state.light >= branch.cost && !state.branchesOwned[branchId]) {
+    state.light -= branch.cost;
+    state.branchesOwned[branchId] = true;
+    renderAll();
+    saveGame();
+    showToast(`🔬 Unlocked: ${branch.name} — ${branch.effect}`);
+  }
+}
+
+function checkStageProgress() {
+  const next = getNextStage();
+  if (next && state.totalLightEarned >= next.threshold) {
+    state.currentStageIndex++;
+    showToast(`🎉 Evolved into ${next.name}! ${next.fact}`);
+    renderAll();
+  }
+}
+
+function resetGame() {
+  if (confirm("Reset all progress? This cannot be undone.")) {
+    localStorage.removeItem(SAVE_KEY);
+    location.reload();
+  }
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+function formatNum(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + "B";
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(2) + "K";
+  return Math.floor(n * 10) / 10;
+}
+
+function renderTopBar() {
+  document.getElementById("energyCount").textContent = formatNum(state.light) + " ☀️";
+  document.getElementById("energyRate").textContent = "+" + formatNum(getLightPerSecond()) + " light/sec";
+}
+
+function renderPlant() {
+  const stage = getCurrentStage();
+  document.getElementById("plantEmoji").textContent = stage.emoji;
+  document.getElementById("plantName").textContent = stage.name;
+  document.getElementById("factText").textContent = stage.fact;
+
+  const next = getNextStage();
+  const progressBar = document.getElementById("progressBar");
+  const progressLabel = document.getElementById("progressLabel");
+  if (next) {
+    const prevThreshold = stage.threshold;
+    const range = next.threshold - prevThreshold;
+    const progressed = state.totalLightEarned - prevThreshold;
+    const pct = Math.max(0, Math.min(100, (progressed / range) * 100));
+    progressBar.style.width = pct + "%";
+    progressLabel.textContent = `${formatNum(state.totalLightEarned)} / ${formatNum(next.threshold)} toward ${next.name}`;
+  } else {
+    progressBar.style.width = "100%";
+    progressLabel.textContent = "Maximum evolution reached — for now.";
+  }
+
+  const track = document.getElementById("stageTrack");
+  track.innerHTML = "";
+  STAGES.forEach((s, i) => {
+    const dot = document.createElement("div");
+    dot.className = "stage-dot" + (i <= state.currentStageIndex ? " reached" : "") + (i === state.currentStageIndex ? " current" : "");
+    dot.textContent = s.emoji;
+    dot.title = s.name;
+    track.appendChild(dot);
+  });
+}
+
+function renderGenerators() {
+  const list = document.getElementById("generatorList");
+  list.innerHTML = "";
+  GENERATORS.forEach(gen => {
+    const unlocked = state.currentStageIndex >= gen.unlockStage;
+    const cost = getGenCost(gen);
+    const owned = state.generators[gen.id];
+    const canAfford = state.light >= cost;
+
+    const item = document.createElement("div");
+    item.className = "gen-item" + (unlocked ? "" : " locked");
+
+    item.innerHTML = `
+      <div class="gen-info">
+        <div class="gen-emoji">${gen.emoji}</div>
+        <div>
+          <div class="gen-name">${unlocked ? gen.name : "??? (locked)"}</div>
+          <div class="gen-detail">${unlocked ? `Owned: ${owned} · +${gen.baseProduction}/sec each` : `Reach stage: ${STAGES[gen.unlockStage].name}`}</div>
+        </div>
+      </div>
+      ${unlocked ? `<button class="buy-btn" data-gen="${gen.id}" ${canAfford ? "" : "disabled"}>${formatNum(cost)} ☀️</button>` : ""}
+    `;
+    list.appendChild(item);
+  });
+
+  list.querySelectorAll("[data-gen]").forEach(btn => {
+    btn.addEventListener("click", () => buyGenerator(btn.dataset.gen));
+  });
+}
+
+function renderBranches() {
+  const list = document.getElementById("branchList");
+  list.innerHTML = "";
+  SPECULATIVE_BRANCHES.forEach(branch => {
+    const reqStageIndex = STAGES.findIndex(s => s.id === branch.requiresStage);
+    const unlocked = state.currentStageIndex >= reqStageIndex;
+    const owned = !!state.branchesOwned[branch.id];
+    const canAfford = state.light >= branch.cost;
+
+    const item = document.createElement("div");
+    item.className = "branch-item" + (unlocked ? "" : " locked");
+
+    item.innerHTML = `
+      <div class="gen-info">
+        <div class="gen-emoji">${branch.emoji}</div>
+        <div>
+          <span class="branch-tag">SPECULATIVE</span>
+          <div class="gen-name">${unlocked ? branch.name : "??? (locked)"}</div>
+          <div class="gen-detail">${unlocked ? branch.description : `Reach stage: ${STAGES[reqStageIndex].name}`}</div>
+          ${unlocked ? `<div class="gen-detail"><em>${branch.effect}</em></div>` : ""}
+        </div>
+      </div>
+      ${unlocked ? (owned
+        ? `<span style="color:#5a9c4a; font-weight:bold; font-size:0.85rem;">✓ Active</span>`
+        : `<button class="buy-btn" data-branch="${branch.id}" ${canAfford ? "" : "disabled"}>${formatNum(branch.cost)} ☀️</button>`
+      ) : ""}
+    `;
+    list.appendChild(item);
+  });
+
+  list.querySelectorAll("[data-branch]").forEach(btn => {
+    btn.addEventListener("click", () => buyBranch(btn.dataset.branch));
+  });
+}
+
+function renderAll() {
+  renderTopBar();
+  renderPlant();
+  renderGenerators();
+  renderBranches();
+}
+
+function showToast(msg) {
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
+
+function showFloatingNumber(evt, text) {
+  const num = document.createElement("div");
+  num.className = "float-num";
+  num.textContent = text;
+  const rect = evt.target.getBoundingClientRect();
+  num.style.left = (rect.left + rect.width / 2 - 10) + "px";
+  num.style.top = (rect.top - 10) + "px";
+  num.style.position = "fixed";
+  document.body.appendChild(num);
+  setTimeout(() => num.remove(), 800);
+}
+
+// ============================================================
+// GAME LOOP
+// ============================================================
+function tick() {
+  const perSecond = getLightPerSecond();
+  if (perSecond > 0) {
+    const gained = perSecond / 10; // tick runs at 10x/sec
+    state.light += gained;
+    state.totalLightEarned += gained;
+    checkStageProgress();
+    renderTopBar();
+  }
+}
+
+// ============================================================
+// INIT
+// ============================================================
+function init() {
+  loadGame();
+  renderAll();
+
+  document.getElementById("plantEmoji").addEventListener("click", clickPlant);
+  document.getElementById("resetBtn").addEventListener("click", resetGame);
+
+  setInterval(tick, 100);
+  setInterval(() => { renderGenerators(); renderBranches(); }, 500); // refresh affordability/locks
+  setInterval(saveGame, 5000);
+
+  window.addEventListener("beforeunload", saveGame);
+}
+
+init();
+</script>
+</body>
+</html>
