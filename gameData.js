@@ -1,15 +1,21 @@
 // ============================================================
 // GAME DATA — Plant Evolution Idle Game
-// Real evolutionary science as the backbone, with optional
-// speculative "what if" branches layered on top.
+// Real evolutionary science as the backbone. The trunk path
+// (STAGES) follows the traditional plant kingdom groups —
+// algae -> bryophytes -> pteridophytes -> gymnosperms -> angiosperms.
+// After reaching Flowering Plant, the player picks ONE of three
+// real angiosperm clades (Eudicots / Monocots / Magnoliids) and
+// progresses through real plant FAMILIES within that clade.
+// Speculative "what if" branches layer optional imagination on top.
 // ============================================================
 
+// --- TRUNK STAGES (shared by every player, before the fork) ---
 const STAGES = [
   {
     id: "cyanobacteria",
     name: "Cyanobacteria",
     emoji: "🦠",
-    threshold: 0, // light energy required to BE here (stage 0 = start)
+    threshold: 0,
     fact: "Cyanobacteria were among the first organisms to perform photosynthesis, around 2.7 billion years ago. They're responsible for the 'Great Oxidation Event' that filled Earth's atmosphere with oxygen.",
     flavor: "A single-celled photosynthesizer floating in ancient water. Humble beginnings."
   },
@@ -51,62 +57,114 @@ const STAGES = [
     emoji: "🌸",
     threshold: 30000,
     fact: "Angiosperms (flowering plants) appeared roughly 130 million years ago and now make up about 90% of all living plant species. Their success is tied to co-evolution with pollinators like insects.",
-    flavor: "Flowers, fruit, color, scent — a plant that advertises and trades resources with animals to spread itself."
-  },
-  {
-    id: "specialized",
-    name: "Specialized Modern Plant",
-    emoji: "🌳",
-    threshold: 150000,
-    fact: "Modern plants show extreme specialization: C4 photosynthesis (like corn) evolved independently dozens of times as a more efficient carbon-fixing pathway in hot, dry climates. Carnivorous plants like Venus flytraps evolved to get nitrogen from prey instead of soil.",
-    flavor: "The cutting edge of 400+ million years of plant evolution. Every adaptation here exists for a precise reason."
-  },
-  {
-    id: "grasses",
-    name: "Grasses",
-    emoji: "🌾",
-    threshold: 750000,
-    fact: "Grasses appeared around 70 million years ago and didn't become widespread until roughly 30-40 million years ago. Their growth point sits near the soil rather than the tip, which is why grass survives grazing and mowing — something trees and most other plants can't tolerate.",
-    flavor: "Low, tough, and built to be eaten and bounce back. This lineage will go on to feed most of human civilization."
-  },
-  {
-    id: "carnivorous",
-    name: "Carnivorous Plant",
-    emoji: "🪤",
-    threshold: 3500000,
-    fact: "Carnivorous plants evolved independently at least six separate times. The Venus flytrap's snap-trap leaves close in under a second when trigger hairs are touched twice within about 20 seconds — a safeguard against wasting energy on false alarms like raindrops.",
-    flavor: "When the soil won't give you nitrogen, take it directly from whatever wanders close enough."
-  },
-  {
-    id: "mycorrhizal",
-    name: "Mycorrhizal Partner",
-    emoji: "🍄",
-    threshold: 16000000,
-    fact: "Around 90% of land plant species form mycorrhizal partnerships with fungi. The fungal network extends a plant's effective root reach enormously, trading sugars for water and minerals the fungus is far better at finding.",
-    flavor: "Roots alone were never the whole story. Underground, a fungal network does half the work."
-  },
-  {
-    id: "nitrogen_fixing",
-    name: "Nitrogen-Fixer",
-    emoji: "🫘",
-    threshold: 80000000,
-    fact: "Legumes host nitrogen-fixing bacteria (Rhizobium) in root nodules, converting atmospheric nitrogen gas into a usable form. This is why crop rotation with legumes naturally enriches soil — it's a real partnership farmers have exploited for thousands of years.",
-    flavor: "Why wait for nitrogen to wash into the soil when the air is already 78% nitrogen — if you can just convince a bacterium to share?"
-  },
-  {
-    id: "extremophile",
-    name: "Extremophile Plant",
-    emoji: "🌵",
-    threshold: 400000000,
-    fact: "Desert succulents use CAM photosynthesis, opening their pores only at night to minimize water loss. Some resurrection plants can lose over 95% of their water content and survive, rehydrating and resuming photosynthesis within hours of rain.",
-    flavor: "Heat, drought, frost, salt — the harshest environments on land, and something green still found a way to grow there."
+    flavor: "Flowers, fruit, color, scent — a plant that advertises and trades resources with animals to spread itself. From here, your lineage will specialize."
   }
 ];
 
-// Idle generators — each themed to real plant biology.
-// `produces`: "light" or "water" — which resource this generator generates.
-// `costWater` (optional): if present, buying this generator ALSO costs Water,
-// not just Light — this is where the resource trade-off lives.
+// The trunk stage id after which the player must choose a clade.
+const FORK_AFTER_STAGE_ID = "flowering";
+
+// --- CLADES: the three real branches of flowering plants ---
+const CLADES = [
+  {
+    id: "eudicots",
+    name: "Eudicots",
+    emoji: "🌿",
+    shortFact: "About 75% of all flowering plant species are eudicots — roses, beans, sunflowers, oaks, tomatoes. Two seed leaves, netted leaf veins, vascular bundles arranged in a ring (which is why eudicots include almost all broadleaf trees).",
+    familyStages: [
+      {
+        id: "rosaceae",
+        name: "Rosaceae (Rose Family)",
+        emoji: "🌹",
+        threshold: 150000,
+        fact: "The rose family includes roses, apples, pears, cherries, strawberries, and almonds. Most have five-petaled flowers and produce a pome or drupe — fleshy fruit types built around a protected seed.",
+        flavor: "Showy flowers, edible fruit, and a five-petal blueprint reused across hundreds of beloved food crops."
+      },
+      {
+        id: "fabaceae",
+        name: "Fabaceae (Legume Family)",
+        emoji: "🫘",
+        threshold: 750000,
+        fact: "Legumes host nitrogen-fixing bacteria (Rhizobium) in root nodules, converting atmospheric nitrogen gas into a usable form. This is why crop rotation with legumes naturally enriches soil — a real partnership farmers have exploited for thousands of years.",
+        flavor: "Why wait for nitrogen to wash into the soil when the air is already 78% nitrogen — if you can just convince a bacterium to share?"
+      },
+      {
+        id: "pitcher_plant",
+        name: "Pitcher Plant Families",
+        emoji: "🪤",
+        threshold: 3500000,
+        fact: "Carnivory in eudicots evolved independently at least twice: Sarraceniaceae (North American pitcher plants) and Nepenthaceae (Old World tropical pitcher plants) aren't closely related — they converged on the same slippery, nectar-lined trap strategy from different starting points.",
+        flavor: "When the soil won't give you nitrogen, take it directly from whatever wanders in and can't climb back out."
+      }
+    ]
+  },
+  {
+    id: "monocots",
+    name: "Monocots",
+    emoji: "🌾",
+    shortFact: "About 23% of flowering plant species are monocots — grasses, orchids, palms, lilies. One seed leaf, parallel leaf veins, scattered (not ringed) vascular bundles, which is part of why true woody trees are rare among monocots.",
+    familyStages: [
+      {
+        id: "poaceae",
+        name: "Poaceae (Grass Family)",
+        emoji: "🌾",
+        threshold: 150000,
+        fact: "Grasses appeared around 70 million years ago and didn't become widespread until roughly 30-40 million years ago. Their growth point sits near the soil rather than the tip, which is why grass survives grazing and mowing — something most other plants can't tolerate.",
+        flavor: "Low, tough, and built to be eaten and bounce back. This family will go on to feed most of human civilization."
+      },
+      {
+        id: "orchidaceae",
+        name: "Orchidaceae (Orchid Family)",
+        emoji: "🌺",
+        threshold: 750000,
+        fact: "Orchidaceae is one of the two largest plant families on Earth, with extraordinarily specialized flowers — some species mimic the exact shape and scent of a specific female insect to trick males into attempting to mate with the flower, pollinating it in the process.",
+        flavor: "Extreme specialization: flowers that deceive, mimic, and lure a single very specific pollinator."
+      },
+      {
+        id: "arecaceae",
+        name: "Arecaceae (Palm Family)",
+        emoji: "🌴",
+        threshold: 3500000,
+        fact: "Palms are unusual monocots: most monocots stay herbaceous, but palms grow tall and tree-like without true secondary wood growth, instead thickening their stem cells early and never branching from a single growing point at the crown.",
+        flavor: "A monocot that found its own way to become a tree, without ever borrowing the eudicot playbook for wood."
+      }
+    ]
+  },
+  {
+    id: "magnoliids",
+    name: "Magnoliids",
+    emoji: "🌼",
+    shortFact: "Only about 2-3% of flowering plant species are magnoliids — magnolias, cinnamon, black pepper, avocado. They retain some ancestral traits that bridge toward earlier seed plants, like pollen with a single pore instead of the eudicot triaperturate (three-pore) pattern.",
+    familyStages: [
+      {
+        id: "magnoliaceae",
+        name: "Magnoliaceae (Magnolia Family)",
+        emoji: "🌼",
+        threshold: 150000,
+        fact: "Magnolias are considered among the most ancestral-looking flowering plants alive: their large, simple flowers have numerous separate petal-like parts rather than the fused, specialized flower structures seen in most later angiosperms.",
+        flavor: "A flower built the old way — broad, simple, and showing its evolutionary age in every petal."
+      },
+      {
+        id: "lauraceae",
+        name: "Lauraceae (Laurel Family)",
+        emoji: "🍃",
+        threshold: 750000,
+        fact: "The laurel family includes cinnamon, bay laurel, and avocado. Many produce strong aromatic oils in their leaves and bark — a real chemical defense against herbivores and pathogens that also happens to make them valuable as spices.",
+        flavor: "Chemistry as defense: aromatic oils that deter predators and, incidentally, flavor a thousand kitchens."
+      },
+      {
+        id: "piperaceae",
+        name: "Piperaceae (Pepper Family)",
+        emoji: "🌶️",
+        threshold: 3500000,
+        fact: "Black pepper (Piper nigrum) produces piperine, an alkaloid that irritates predators' mucous membranes — a chemical defense so effective that humans now farm the plant specifically to harvest that irritant as a spice.",
+        flavor: "A defense chemical so successful at deterring predators that it became one of the most traded substances in human history."
+      }
+    ]
+  }
+];
+
+// --- Idle generators ---
 const GENERATORS = [
   {
     id: "chlorophyll",
@@ -190,91 +248,116 @@ const GENERATORS = [
     produces: "water",
     fact: "Transpiration — water evaporating from leaf pores — creates negative pressure that pulls water upward from the roots, sometimes lifting it over 100 meters in tall trees."
   },
+
+  // --- EUDICOTS clade generators ---
   {
-    id: "c4",
-    name: "C4 Carbon Pathway",
-    emoji: "⚙️",
-    baseCost: 120000,
+    id: "showy_flower",
+    name: "Showy Five-Petal Flower",
+    emoji: "🌸",
+    baseCost: 150000,
     baseProduction: 1100,
-    unlockStage: 6,
     produces: "light",
-    costWater: 12000,
-    fact: "C4 photosynthesis concentrates CO2 before fixing it, dramatically reducing water loss. It evolved independently in over 60 plant lineages — a textbook case of convergent evolution."
-  },
-  {
-    id: "rhizome",
-    name: "Rhizome Spread",
-    emoji: "🌾",
-    baseCost: 750000,
-    baseProduction: 6000,
-    unlockStage: 7,
-    produces: "light",
-    fact: "Many grasses spread via rhizomes — underground stems that send up new shoots, letting a single grass plant cover huge areas and recover quickly after being grazed or cut."
-  },
-  {
-    id: "trap",
-    name: "Snap Trap",
-    emoji: "🪤",
-    baseCost: 4000000,
-    baseProduction: 32000,
-    unlockStage: 8,
-    produces: "light",
-    costWater: 400000,
-    fact: "Pitcher plants use a different carnivory strategy than Venus flytraps — a slippery, nectar-lined tube that insects fall into and can't climb back out of, no movement required."
-  },
-  {
-    id: "fungal_network",
-    name: "Fungal Network",
-    emoji: "🍄",
-    baseCost: 18000000,
-    baseProduction: 150000,
-    unlockStage: 9,
-    produces: "light",
-    costWater: 2000000,
-    fact: "Mycorrhizal fungal networks can physically connect multiple separate plants underground, sometimes nicknamed the 'Wood Wide Web' — though scientists still debate how much real information transfer happens versus simple nutrient exchange.",
-    synergyWith: ["mycorrhizal", "nitrogen_fixing"], // production boosted by these stages being unlocked
-    synergyBonusPerStage: 0.25
+    cladeId: "eudicots",
+    unlockFamilyStage: "rosaceae",
+    fact: "Rosaceae flowers typically have five petals and five sepals arranged in a radial pattern — a structural template reused across apples, roses, cherries, and strawberries alike."
   },
   {
     id: "root_nodule",
     name: "Root Nodule Colony",
     emoji: "🫘",
-    baseCost: 90000000,
-    baseProduction: 750000,
-    unlockStage: 10,
+    baseCost: 750000,
+    baseProduction: 6000,
     produces: "light",
-    fact: "Root nodules form when Rhizobium bacteria infect legume root hairs, triggering the plant to grow a protective nodule around them — a controlled infection that turns into a nutrient-sharing factory.",
-    synergyWith: ["mycorrhizal", "nitrogen_fixing"],
-    synergyBonusPerStage: 0.25
+    cladeId: "eudicots",
+    unlockFamilyStage: "fabaceae",
+    fact: "Root nodules form when Rhizobium bacteria infect legume root hairs, triggering the plant to grow a protective nodule around them — a controlled infection that turns into a nutrient-sharing factory."
   },
   {
-    id: "cam_pathway",
-    name: "CAM Photosynthesis",
-    emoji: "🌵",
-    baseCost: 450000000,
-    baseProduction: 3800000,
-    unlockStage: 11,
+    id: "trap",
+    name: "Slippery Pitcher Trap",
+    emoji: "🪤",
+    baseCost: 3500000,
+    baseProduction: 32000,
     produces: "light",
-    costWater: 50000000,
-    fact: "CAM (Crassulacean Acid Metabolism) photosynthesis stores CO2 at night and uses it during the day, the reverse timing of most plants — a direct adaptation to minimize water loss in arid environments.",
-    synergyWith: ["carnivorous", "mycorrhizal", "nitrogen_fixing", "extremophile"],
-    synergyBonusPerStage: 0.15
+    costWater: 400000,
+    cladeId: "eudicots",
+    unlockFamilyStage: "pitcher_plant",
+    fact: "Pitcher plants use a passive carnivory strategy — a slippery, nectar-lined tube that insects fall into and can't climb back out of, no movement required."
+  },
+
+  // --- MONOCOTS clade generators ---
+  {
+    id: "rhizome",
+    name: "Rhizome Spread",
+    emoji: "🌾",
+    baseCost: 150000,
+    baseProduction: 1100,
+    produces: "light",
+    cladeId: "monocots",
+    unlockFamilyStage: "poaceae",
+    fact: "Many grasses spread via rhizomes — underground stems that send up new shoots, letting a single grass plant cover huge areas and recover quickly after being grazed or cut."
   },
   {
-    id: "succulent_tissue",
-    name: "Succulent Water Storage",
-    emoji: "🫙",
-    baseCost: 200000000,
-    baseProduction: 1600000,
-    unlockStage: 11,
-    produces: "water",
-    fact: "Succulents store water in specialized tissue in their leaves, stems, or roots, letting them survive long droughts by drawing down internal reserves instead of constantly absorbing from soil."
+    id: "mimicry_flower",
+    name: "Pollinator-Mimicry Flower",
+    emoji: "🌺",
+    baseCost: 750000,
+    baseProduction: 6000,
+    produces: "light",
+    cladeId: "monocots",
+    unlockFamilyStage: "orchidaceae",
+    fact: "Some orchids produce flowers that visually and chemically mimic female insects so precisely that males attempt to mate with them, inadvertently pollinating the orchid — a strategy called pseudocopulation."
+  },
+  {
+    id: "crown_growth",
+    name: "Single Crown Growth Point",
+    emoji: "🌴",
+    baseCost: 3500000,
+    baseProduction: 32000,
+    produces: "light",
+    cladeId: "monocots",
+    unlockFamilyStage: "arecaceae",
+    fact: "A palm tree has only one growing point at its crown — if that single point is damaged, the palm cannot branch or recover the way a typical tree can."
+  },
+
+  // --- MAGNOLIIDS clade generators ---
+  {
+    id: "ancestral_petal",
+    name: "Ancestral Petal Whorl",
+    emoji: "🌼",
+    baseCost: 150000,
+    baseProduction: 1300,
+    produces: "light",
+    cladeId: "magnoliids",
+    unlockFamilyStage: "magnoliaceae",
+    fact: "Magnolia flowers have numerous separate petal-like tepals arranged in a spiral rather than the fused, highly specialized floral parts seen in most later-evolving flowering plants — a real ancestral trait."
+  },
+  {
+    id: "aromatic_oil",
+    name: "Aromatic Oil Glands",
+    emoji: "🍃",
+    baseCost: 750000,
+    baseProduction: 7200,
+    produces: "light",
+    cladeId: "magnoliids",
+    unlockFamilyStage: "lauraceae",
+    fact: "Laurel family plants store aromatic oils in their leaves and bark as a chemical defense against herbivores and pathogens — the same compounds we harvest as cinnamon, bay leaf, and camphor."
+  },
+  {
+    id: "alkaloid_defense",
+    name: "Alkaloid Defense Compound",
+    emoji: "🌶️",
+    baseCost: 3500000,
+    baseProduction: 38000,
+    produces: "light",
+    cladeId: "magnoliids",
+    unlockFamilyStage: "piperaceae",
+    fact: "Piperine, the alkaloid that gives black pepper its bite, evolved as an irritant to deter animals from eating the plant's fruit — a defense mechanism humans repurposed as a global spice."
   }
 ];
 
 // Speculative branches — optional, fantastical, clearly flagged as imagination.
-// Each unlocks once you reach a certain stage, costs light energy, and grants
-// a fun (non-essential) bonus or cosmetic change.
+// Once owned, branches survive every future Mass Extinction Event (prestige).
 const SPECULATIVE_BRANCHES = [
   {
     id: "bioluminescent_moss",
@@ -284,7 +367,7 @@ const SPECULATIVE_BRANCHES = [
     cost: 800,
     isSpeculative: true,
     description: "SPECULATIVE: What if moss evolved bioluminescence to attract nocturnal spore-dispersing insects, the way some fungi (like Mycena) actually do?",
-    effect: "+10% light energy generation at night-themed milestones (flavor bonus: +5% global production)",
+    effect: "+5% global production",
     productionMultiplier: 1.05
   },
   {
@@ -295,7 +378,7 @@ const SPECULATIVE_BRANCHES = [
     cost: 4000,
     isSpeculative: true,
     description: "SPECULATIVE: Real tree-sized ferns (like Psaronius) existed 300 million years ago and went extinct. What if that lineage never died out?",
-    effect: "+8% global light production",
+    effect: "+8% global production",
     productionMultiplier: 1.08
   },
   {
@@ -306,7 +389,7 @@ const SPECULATIVE_BRANCHES = [
     cost: 25000,
     isSpeculative: true,
     description: "SPECULATIVE: What if seeds evolved a primitive muscular pulse, like a tumbleweed with intent, to actively seek better soil instead of waiting for wind?",
-    effect: "+10% global light production",
+    effect: "+10% global production",
     productionMultiplier: 1.10
   },
   {
@@ -317,94 +400,127 @@ const SPECULATIVE_BRANCHES = [
     cost: 100000,
     isSpeculative: true,
     description: "SPECULATIVE: Some real flowers already shift UV patterns invisible to us. What if a lineage evolved full visible-spectrum color shifting to attract a wider range of pollinators across seasons?",
-    effect: "+12% global light production",
+    effect: "+12% global production",
     productionMultiplier: 1.12
-  },
-  {
-    id: "future_plant",
-    name: "The Far-Future Plant",
-    emoji: "🪐",
-    requiresStage: "specialized",
-    cost: 600000,
-    isSpeculative: true,
-    description: "SPECULATIVE: A purely imaginative leap beyond today's science — a plant adapted for extreme environments we associate with science fiction (low light, high radiation, minimal water). Pure speculation, not a real prediction.",
-    effect: "+20% global light production",
-    productionMultiplier: 1.20
   },
   {
     id: "engineered_drought",
     name: "Engineered Drought-Resistant Lineage",
     emoji: "🧬",
-    requiresStage: "grasses",
+    requiresClade: "monocots",
+    requiresFamilyStage: "poaceae",
     cost: 2000000,
     isSpeculative: true,
     description: "GROUNDED SPECULATION: Real CRISPR gene-editing research is already underway to enhance drought tolerance in crops. This imagines that work succeeding dramatically sooner and more broadly than current science supports.",
-    effect: "+10% global light production",
+    effect: "+10% global production",
     productionMultiplier: 1.10
   },
   {
     id: "active_trap_swarm",
     name: "Mobile Trap Swarm",
     emoji: "🦟",
-    requiresStage: "carnivorous",
+    requiresClade: "eudicots",
+    requiresFamilyStage: "pitcher_plant",
     cost: 10000000,
     isSpeculative: true,
     description: "WILD SPECULATION: No real plant can detach and move to hunt. This imagines carnivorous traps evolving limited independent mobility — a leap with no basis in current botany, included purely for fun.",
-    effect: "+15% global light production",
+    effect: "+15% global production",
     productionMultiplier: 1.15
-  },
-  {
-    id: "fungal_communication",
-    name: "Enhanced Fungal Communication Network",
-    emoji: "📡",
-    requiresStage: "mycorrhizal",
-    cost: 40000000,
-    isSpeculative: true,
-    description: "GROUNDED SPECULATION: Real research explores whether mycorrhizal networks let plants share warning signals about pests or drought. This imagines that signaling becoming far more sophisticated and reliable than current evidence shows.",
-    effect: "+12% global light production",
-    productionMultiplier: 1.12
   },
   {
     id: "synthetic_nitrogen_organ",
     name: "Synthetic Nitrogen Organ",
     emoji: "⚗️",
-    requiresStage: "nitrogen_fixing",
-    cost: 180000000,
-    costWater: 20000000,
+    requiresClade: "eudicots",
+    requiresFamilyStage: "fabaceae",
+    cost: 18000000,
+    costWater: 2000000,
     isSpeculative: true,
     description: "WILD SPECULATION: What if a plant evolved an internal organ that fixed atmospheric nitrogen directly, with no bacterial partner needed at all? No known plant does this — it's a genuine biochemical leap beyond anything in nature.",
-    effect: "+15% global light production",
+    effect: "+15% global production",
     productionMultiplier: 1.15
   },
   {
-    id: "radiation_tolerant_extremophile",
-    name: "Radiation-Tolerant Extremophile",
-    emoji: "☢️",
-    requiresStage: "extremophile",
-    cost: 900000000,
-    costWater: 150000000,
+    id: "mimicry_overdrive",
+    name: "Universal Pollinator Mimicry",
+    emoji: "🦋",
+    requiresClade: "monocots",
+    requiresFamilyStage: "orchidaceae",
+    cost: 18000000,
     isSpeculative: true,
-    description: "WILD SPECULATION: Some real organisms (like Deinococcus radiodurans bacteria) tolerate extreme radiation. This imagines a plant lineage evolving comparable tolerance — well beyond what any known plant can survive.",
-    effect: "+25% global light production",
+    description: "WILD SPECULATION: Real orchids mimic one specific pollinator species. This imagines a lineage that could shift its mimicry to match whichever pollinator is locally abundant — a flexibility no known orchid has.",
+    effect: "+15% global production",
+    productionMultiplier: 1.15
+  },
+  {
+    id: "self_grafting_canopy",
+    name: "Self-Grafting Canopy Network",
+    emoji: "🌳",
+    requiresClade: "monocots",
+    requiresFamilyStage: "arecaceae",
+    cost: 60000000,
+    isSpeculative: true,
+    description: "WILD SPECULATION: Real palms never branch from a single crown. This imagines a palm lineage whose crowns could fuse and share resources with neighboring palms underground — pure speculation.",
+    effect: "+18% global production",
+    productionMultiplier: 1.18
+  },
+  {
+    id: "ultra_aromatic_defense",
+    name: "Ultra-Aromatic Defense Cloud",
+    emoji: "🍃",
+    requiresClade: "magnoliids",
+    requiresFamilyStage: "lauraceae",
+    cost: 60000000,
+    isSpeculative: true,
+    description: "GROUNDED SPECULATION: Real laurel family plants release aromatic oils when damaged. This imagines a lineage that releases an airborne defensive cloud strong enough to also deter herbivores from nearby plants.",
+    effect: "+15% global production",
+    productionMultiplier: 1.15
+  },
+  {
+    id: "extreme_alkaloid",
+    name: "Extreme Alkaloid Lineage",
+    emoji: "☢️",
+    requiresClade: "magnoliids",
+    requiresFamilyStage: "piperaceae",
+    cost: 200000000,
+    costWater: 20000000,
+    isSpeculative: true,
+    description: "WILD SPECULATION: Black pepper's piperine deters predators through irritation. This imagines a lineage evolving an alkaloid potent enough to be genuinely toxic to nearly anything that eats it — beyond anything in the real Piperaceae family.",
+    effect: "+25% global production",
     productionMultiplier: 1.25
   }
 ];
 
 // Prestige — "Mass Extinction Event"
-// Real framing: Earth has had 5 major mass extinctions; surviving lineages
-// carried forward traits rather than starting from a blank slate.
-// Resets current run (light, water, generators, branches, stage) in exchange
-// for a permanent global production multiplier based on lifetime progress.
 const PRESTIGE_CONFIG = {
-  unlockStage: "flowering", // stage id required before prestige becomes available
-  // Resilience Points earned = floor( (totalLightEarned + totalWaterEarned) ^ exponent / divisor )
+  unlockStage: "flowering",
   exponent: 0.5,
   divisor: 100,
-  // Each Resilience Point grants this much permanent multiplier (additive then applied as +%)
   multiplierPerPoint: 0.02,
   fact: "Earth has experienced five major mass extinctions. Each time, surviving plant lineages didn't start over from nothing — they carried forward whatever adaptations let them survive, becoming the seed for everything that followed."
 };
 
+// Clade completion perks — reaching the FINAL family stage of a clade for
+// the first time (in any run, ever) permanently unlocks a small head start
+// toward that clade in all future runs, even if a different clade is chosen.
+const CLADE_COMPLETION_PERKS = {
+  eudicots: {
+    description: "Future runs start with 3 free Showy Five-Petal Flower generators already owned, the moment Eudicots is chosen.",
+    freeGeneratorId: "showy_flower",
+    freeGeneratorCount: 3
+  },
+  monocots: {
+    description: "Future runs start with 3 free Rhizome Spread generators already owned, the moment Monocots is chosen.",
+    freeGeneratorId: "rhizome",
+    freeGeneratorCount: 3
+  },
+  magnoliids: {
+    description: "Future runs start with 3 free Ancestral Petal Whorl generators already owned, the moment Magnoliids is chosen.",
+    freeGeneratorId: "ancestral_petal",
+    freeGeneratorCount: 3
+  }
+};
+
 if (typeof module !== "undefined") {
-  module.exports = { STAGES, GENERATORS, SPECULATIVE_BRANCHES, PRESTIGE_CONFIG };
+  module.exports = { STAGES, CLADES, FORK_AFTER_STAGE_ID, GENERATORS, SPECULATIVE_BRANCHES, PRESTIGE_CONFIG, CLADE_COMPLETION_PERKS };
 }
