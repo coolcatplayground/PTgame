@@ -257,7 +257,14 @@
       <div class="energy-count" id="energyCount">0</div>
       <div class="energy-rate" id="energyRate">+0 light/sec</div>
     </div>
-    <button class="reset-btn" id="resetBtn">Reset progress</button>
+    <div>
+      <div class="energy-count" id="waterCount" style="color:#3a7ca8;">0</div>
+      <div class="energy-rate" id="waterRate">+0 water/sec</div>
+    </div>
+    <div style="text-align:right;">
+      <div id="prestigeNote" style="font-size:0.8rem; color:#8a4a4a; font-weight:600;"></div>
+      <button class="reset-btn" id="resetBtn">Reset progress</button>
+    </div>
   </div>
 
   <div class="main-grid">
@@ -267,6 +274,10 @@
         <div class="plant-emoji" id="plantEmoji">🦠</div>
         <div class="plant-name" id="plantName">Cyanobacteria</div>
         <div class="click-hint">Click the plant for light energy</div>
+        <div style="margin-top:10px;">
+          <span class="plant-emoji" id="waterDrop" style="font-size:2.5rem;">💧</span>
+          <div class="click-hint">Click the droplet for water</div>
+        </div>
         <div class="progress-bar-outer">
           <div class="progress-bar-inner" id="progressBar"></div>
         </div>
@@ -289,6 +300,11 @@
     <h2>🔬 Speculative Evolution Branches <span style="font-size:0.7rem; color:#8a7a3a; font-weight:normal;">(imaginative, not real science)</span></h2>
     <div id="branchList"></div>
   </div>
+
+  <div class="panel" style="margin-top:16px; border-color:#c8a8a8;">
+    <h2>🌋 Mass Extinction Event <span style="font-size:0.7rem; color:#8a4a4a; font-weight:normal;">(prestige / permanent bonus)</span></h2>
+    <div id="prestigePanel"></div>
+  </div>
 </div>
 
 <script src="gameData.js"></script>
@@ -301,12 +317,17 @@ const SAVE_KEY = "plantEvolutionSave_v1";
 let state = {
   light: 0,
   totalLightEarned: 0,
+  water: 0,
+  totalWaterEarned: 0,
   clickPower: 1,
+  waterClickPower: 1,
   generators: {},      // id -> count owned
   branchesOwned: {},   // id -> true
   currentStageIndex: 0,
   lastFactSeen: null,
-  lastSavedAt: Date.now() // used to calculate offline progress on next load
+  lastSavedAt: Date.now(), // used to calculate offline progress on next load
+  resiliencePoints: 0,     // permanent prestige currency, survives resets
+  prestigeCount: 0         // how many times the player has prestiged
 };
 
 GENERATORS.forEach(g => state.generators[g.id] = 0);
@@ -345,13 +366,19 @@ function applyOfflineProgress() {
   const elapsedSeconds = (now - state.lastSavedAt) / 1000;
   if (elapsedSeconds <= 0) return;
 
-  const perSecond = getLightPerSecond();
-  if (perSecond > 0) {
-    const earned = perSecond * elapsedSeconds;
+  const lightPerSecond = getLightPerSecond();
+  if (lightPerSecond > 0) {
+    const earned = lightPerSecond * elapsedSeconds;
     state.light += earned;
     state.totalLightEarned += earned;
-    checkStageProgress();
   }
+  const waterPerSecond = getWaterPerSecond();
+  if (waterPerSecond > 0) {
+    const earnedWater = waterPerSecond * elapsedSeconds;
+    state.water += earnedWater;
+    state.totalWaterEarned += earnedWater;
+  }
+  checkStageProgress();
   state.lastSavedAt = now;
 }
 
@@ -371,12 +398,22 @@ function getGenCost(gen) {
   return Math.ceil(gen.baseCost * Math.pow(1.15, owned));
 }
 
+function getGenWaterCost(gen) {
+  if (!gen.costWater) return 0;
+  const owned = state.generators[gen.id];
+  return Math.ceil(gen.costWater * Math.pow(1.15, owned));
+}
+
 function getGlobalMultiplier() {
   let mult = 1;
   SPECULATIVE_BRANCHES.forEach(b => {
     if (state.branchesOwned[b.id]) mult *= b.productionMultiplier;
   });
-  return mult;
+  return mult * getPrestigeMultiplier();
+}
+
+function getPrestigeMultiplier() {
+  return 1 + (state.resiliencePoints * PRESTIGE_CONFIG.multiplierPerPoint);
 }
 
 function getSynergyMultiplier(gen) {
@@ -392,9 +429,38 @@ function getSynergyMultiplier(gen) {
 function getLightPerSecond() {
   let total = 0;
   GENERATORS.forEach(g => {
-    total += g.baseProduction * state.generators[g.id] * getSynergyMultiplier(g);
+    if (g.produces === "light") {
+      total += g.baseProduction * state.generators[g.id] * getSynergyMultiplier(g);
+    }
   });
   return total * getGlobalMultiplier();
+}
+
+function getWaterPerSecond() {
+  let total = 0;
+  GENERATORS.forEach(g => {
+    if (g.produces === "water") {
+      total += g.baseProduction * state.generators[g.id] * getSynergyMultiplier(g);
+    }
+  });
+  return total * getGlobalMultiplier();
+}
+
+function canAffordGenerator(gen) {
+  const lightCost = getGenCost(gen);
+  const waterCost = getGenWaterCost(gen);
+  return state.light >= lightCost && state.water >= waterCost;
+}
+
+function isPrestigeUnlocked() {
+  const stageIndex = STAGES.findIndex(s => s.id === PRESTIGE_CONFIG.unlockStage);
+  return state.currentStageIndex >= stageIndex;
+}
+
+function getPotentialResiliencePoints() {
+  const totalProgress = state.totalLightEarned + state.totalWaterEarned;
+  if (totalProgress <= 0) return 0;
+  return Math.floor(Math.pow(totalProgress, PRESTIGE_CONFIG.exponent) / PRESTIGE_CONFIG.divisor);
 }
 
 // ============================================================
@@ -406,15 +472,24 @@ function clickPlant(evt) {
   state.totalLightEarned += gained;
   checkStageProgress();
   renderTopBar();
-  showFloatingNumber(evt, "+" + formatNum(gained));
+  showFloatingNumber(evt, "+" + formatNum(gained) + " ☀️");
+  saveGame();
+}
+
+function clickWater(evt) {
+  const gained = state.waterClickPower * getGlobalMultiplier();
+  state.water += gained;
+  state.totalWaterEarned += gained;
+  renderTopBar();
+  showFloatingNumber(evt, "+" + formatNum(gained) + " 💧");
   saveGame();
 }
 
 function buyGenerator(genId) {
   const gen = GENERATORS.find(g => g.id === genId);
-  const cost = getGenCost(gen);
-  if (state.light >= cost) {
-    state.light -= cost;
+  if (canAffordGenerator(gen)) {
+    state.light -= getGenCost(gen);
+    state.water -= getGenWaterCost(gen);
     state.generators[genId]++;
     renderAll();
     saveGame();
@@ -423,13 +498,43 @@ function buyGenerator(genId) {
 
 function buyBranch(branchId) {
   const branch = SPECULATIVE_BRANCHES.find(b => b.id === branchId);
-  if (state.light >= branch.cost && !state.branchesOwned[branchId]) {
+  const waterCost = branch.costWater || 0;
+  if (state.light >= branch.cost && state.water >= waterCost && !state.branchesOwned[branchId]) {
     state.light -= branch.cost;
+    state.water -= waterCost;
     state.branchesOwned[branchId] = true;
     renderAll();
     saveGame();
     showToast(`🔬 Unlocked: ${branch.name} — ${branch.effect}`);
   }
+}
+
+function doPrestige() {
+  if (!isPrestigeUnlocked()) return;
+  const gained = getPotentialResiliencePoints();
+  if (gained <= 0) {
+    showToast("Not enough progress yet to gain Resilience Points from an extinction event.");
+    return;
+  }
+  if (!confirm(`Trigger a Mass Extinction Event?\n\nThis resets your current plant, all generators, branches, Light, and Water back to the start.\n\nYou will permanently gain ${gained} Resilience Points (+${(gained * PRESTIGE_CONFIG.multiplierPerPoint * 100).toFixed(0)}% production, forever).\n\nThis cannot be undone.`)) {
+    return;
+  }
+
+  state.resiliencePoints += gained;
+  state.prestigeCount += 1;
+
+  // Reset run-specific progress, keep permanent prestige fields.
+  state.light = 0;
+  state.totalLightEarned = 0;
+  state.water = 0;
+  state.totalWaterEarned = 0;
+  state.currentStageIndex = 0;
+  state.branchesOwned = {};
+  GENERATORS.forEach(g => state.generators[g.id] = 0);
+
+  renderAll();
+  saveGame();
+  showToast(`🌋 Extinction survived! +${gained} Resilience Points. Your lineage carries forward a permanent +${((getPrestigeMultiplier() - 1) * 100).toFixed(0)}% production bonus.`);
 }
 
 function checkStageProgress() {
@@ -442,7 +547,7 @@ function checkStageProgress() {
 }
 
 function resetGame() {
-  if (confirm("Reset all progress? This cannot be undone.")) {
+  if (confirm("Reset ALL progress, including permanent Resilience Points? This cannot be undone.")) {
     localStorage.removeItem(SAVE_KEY);
     location.reload();
   }
@@ -461,6 +566,16 @@ function formatNum(n) {
 function renderTopBar() {
   document.getElementById("energyCount").textContent = formatNum(state.light) + " ☀️";
   document.getElementById("energyRate").textContent = "+" + formatNum(getLightPerSecond()) + " light/sec";
+  document.getElementById("waterCount").textContent = formatNum(state.water) + " 💧";
+  document.getElementById("waterRate").textContent = "+" + formatNum(getWaterPerSecond()) + " water/sec";
+
+  const prestigeMult = getPrestigeMultiplier();
+  const prestigeNote = document.getElementById("prestigeNote");
+  if (prestigeNote) {
+    prestigeNote.textContent = state.resiliencePoints > 0
+      ? `🌋 ${state.resiliencePoints} Resilience Points (+${((prestigeMult - 1) * 100).toFixed(0)}% production)`
+      : "";
+  }
 }
 
 function renderPlant() {
@@ -500,11 +615,13 @@ function renderGenerators() {
   list.innerHTML = "";
   GENERATORS.forEach(gen => {
     const unlocked = state.currentStageIndex >= gen.unlockStage;
-    const cost = getGenCost(gen);
+    const lightCost = getGenCost(gen);
+    const waterCost = getGenWaterCost(gen);
     const owned = state.generators[gen.id];
-    const canAfford = state.light >= cost;
+    const canAfford = canAffordGenerator(gen);
     const synergyMult = getSynergyMultiplier(gen);
     const effectiveProduction = gen.baseProduction * synergyMult;
+    const resourceIcon = gen.produces === "water" ? "💧" : "☀️";
 
     const item = document.createElement("div");
     item.className = "gen-item" + (unlocked ? "" : " locked");
@@ -513,15 +630,19 @@ function renderGenerators() {
       ? ` <span style="color:#5a9c4a;">(synergy ×${synergyMult.toFixed(2)})</span>`
       : (gen.synergyWith ? ` <span style="color:#8a8a7a;">(synergy grows as you unlock: ${gen.synergyWith.map(id => STAGES.find(s=>s.id===id).name).join(", ")})</span>` : "");
 
+    const costLabel = waterCost > 0
+      ? `${formatNum(lightCost)} ☀️ + ${formatNum(waterCost)} 💧`
+      : `${formatNum(lightCost)} ☀️`;
+
     item.innerHTML = `
       <div class="gen-info">
         <div class="gen-emoji">${gen.emoji}</div>
         <div>
           <div class="gen-name">${unlocked ? gen.name : "??? (locked)"}</div>
-          <div class="gen-detail">${unlocked ? `Owned: ${owned} · +${formatNum(effectiveProduction)}/sec each${synergyNote}` : `Reach stage: ${STAGES[gen.unlockStage].name}`}</div>
+          <div class="gen-detail">${unlocked ? `Owned: ${owned} · +${formatNum(effectiveProduction)} ${resourceIcon}/sec each${synergyNote}` : `Reach stage: ${STAGES[gen.unlockStage].name}`}</div>
         </div>
       </div>
-      ${unlocked ? `<button class="buy-btn" data-gen="${gen.id}" ${canAfford ? "" : "disabled"}>${formatNum(cost)} ☀️</button>` : ""}
+      ${unlocked ? `<button class="buy-btn" data-gen="${gen.id}" ${canAfford ? "" : "disabled"}>${costLabel}</button>` : ""}
     `;
     list.appendChild(item);
   });
@@ -538,12 +659,17 @@ function renderBranches() {
     const reqStageIndex = STAGES.findIndex(s => s.id === branch.requiresStage);
     const unlocked = state.currentStageIndex >= reqStageIndex;
     const owned = !!state.branchesOwned[branch.id];
-    const canAfford = state.light >= branch.cost;
+    const waterCost = branch.costWater || 0;
+    const canAfford = state.light >= branch.cost && state.water >= waterCost;
 
     const tagLabel = branch.description.startsWith("WILD") ? "WILD SPECULATION"
       : branch.description.startsWith("GROUNDED") ? "GROUNDED SPECULATION"
       : "SPECULATIVE";
     const tagColor = tagLabel === "WILD SPECULATION" ? "#d98ca8" : tagLabel === "GROUNDED SPECULATION" ? "#8ab4d9" : "#e8c468";
+
+    const costLabel = waterCost > 0
+      ? `${formatNum(branch.cost)} ☀️ + ${formatNum(waterCost)} 💧`
+      : `${formatNum(branch.cost)} ☀️`;
 
     const item = document.createElement("div");
     item.className = "branch-item" + (unlocked ? "" : " locked");
@@ -560,7 +686,7 @@ function renderBranches() {
       </div>
       ${unlocked ? (owned
         ? `<span style="color:#5a9c4a; font-weight:bold; font-size:0.85rem;">✓ Active</span>`
-        : `<button class="buy-btn" data-branch="${branch.id}" ${canAfford ? "" : "disabled"}>${formatNum(branch.cost)} ☀️</button>`
+        : `<button class="buy-btn" data-branch="${branch.id}" ${canAfford ? "" : "disabled"}>${costLabel}</button>`
       ) : ""}
     `;
     list.appendChild(item);
@@ -571,11 +697,33 @@ function renderBranches() {
   });
 }
 
+function renderPrestige() {
+  const panel = document.getElementById("prestigePanel");
+  if (!panel) return;
+  const unlocked = isPrestigeUnlocked();
+
+  if (!unlocked) {
+    const reqStage = STAGES.find(s => s.id === PRESTIGE_CONFIG.unlockStage);
+    panel.innerHTML = `<div class="gen-detail">🌋 Mass Extinction Event unlocks at stage: ${reqStage.name}</div>`;
+    return;
+  }
+
+  const potential = getPotentialResiliencePoints();
+  panel.innerHTML = `
+    <div class="gen-detail" style="margin-bottom:8px;">${PRESTIGE_CONFIG.fact}</div>
+    <div class="gen-detail" style="margin-bottom:8px;">Triggering this resets your current Light, Water, generators, and branches back to the start — but permanently increases all future production.</div>
+    <div class="gen-detail" style="margin-bottom:10px;">Resetting now would grant: <strong>+${potential} Resilience Points</strong> (currently have ${state.resiliencePoints})</div>
+    <button class="buy-btn" id="prestigeBtn" style="background:#8a4a4a;">🌋 Trigger Mass Extinction Event</button>
+  `;
+  document.getElementById("prestigeBtn").addEventListener("click", doPrestige);
+}
+
 function renderAll() {
   renderTopBar();
   renderPlant();
   renderGenerators();
   renderBranches();
+  renderPrestige();
 }
 
 function showToast(msg) {
@@ -602,11 +750,19 @@ function showFloatingNumber(evt, text) {
 // GAME LOOP
 // ============================================================
 function tick() {
-  const perSecond = getLightPerSecond();
-  if (perSecond > 0) {
-    const gained = perSecond / 10; // tick runs at 10x/sec
+  const lightPerSecond = getLightPerSecond();
+  if (lightPerSecond > 0) {
+    const gained = lightPerSecond / 10; // tick runs at 10x/sec
     state.light += gained;
     state.totalLightEarned += gained;
+  }
+  const waterPerSecond = getWaterPerSecond();
+  if (waterPerSecond > 0) {
+    const gainedWater = waterPerSecond / 10;
+    state.water += gainedWater;
+    state.totalWaterEarned += gainedWater;
+  }
+  if (lightPerSecond > 0 || waterPerSecond > 0) {
     checkStageProgress();
     renderTopBar();
   }
@@ -621,10 +777,11 @@ function init() {
   renderAll();
 
   document.getElementById("plantEmoji").addEventListener("click", clickPlant);
+  document.getElementById("waterDrop").addEventListener("click", clickWater);
   document.getElementById("resetBtn").addEventListener("click", resetGame);
 
   setInterval(tick, 100);
-  setInterval(() => { renderGenerators(); renderBranches(); }, 500); // refresh affordability/locks
+  setInterval(() => { renderGenerators(); renderBranches(); renderPrestige(); }, 500); // refresh affordability/locks
   setInterval(saveGame, 5000);
 
   window.addEventListener("beforeunload", saveGame);
