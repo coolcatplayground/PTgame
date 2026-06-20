@@ -104,7 +104,9 @@ const STAGES = [
 ];
 
 // Idle generators — each themed to real plant biology.
-// cost scales with count owned; each produces lightPerSecond.
+// `produces`: "light" or "water" — which resource this generator generates.
+// `costWater` (optional): if present, buying this generator ALSO costs Water,
+// not just Light — this is where the resource trade-off lives.
 const GENERATORS = [
   {
     id: "chlorophyll",
@@ -113,7 +115,18 @@ const GENERATORS = [
     baseCost: 15,
     baseProduction: 0.1,
     unlockStage: 0,
+    produces: "light",
     fact: "Chlorophyll absorbs red and blue light but reflects green — which is why plants look green to us."
+  },
+  {
+    id: "rootlet",
+    name: "Rootlet Cluster",
+    emoji: "💧",
+    baseCost: 20,
+    baseProduction: 0.12,
+    unlockStage: 1,
+    produces: "water",
+    fact: "Even simple algae absorb water and dissolved minerals directly across their cell membranes, with no roots required."
   },
   {
     id: "rhizoid",
@@ -122,6 +135,7 @@ const GENERATORS = [
     baseCost: 100,
     baseProduction: 1,
     unlockStage: 2,
+    produces: "water",
     fact: "Rhizoids are thread-like structures mosses use to anchor to surfaces — simpler than true roots, with no internal vascular tissue."
   },
   {
@@ -131,7 +145,19 @@ const GENERATORS = [
     baseCost: 600,
     baseProduction: 6,
     unlockStage: 3,
+    produces: "light",
+    costWater: 80,
     fact: "Xylem carries water upward from roots; phloem carries sugars made in leaves to the rest of the plant. Together they let plants grow far taller than mosses ever could."
+  },
+  {
+    id: "true_root",
+    name: "True Root System",
+    emoji: "🌰",
+    baseCost: 500,
+    baseProduction: 5,
+    unlockStage: 3,
+    produces: "water",
+    fact: "True roots, unlike rhizoids, contain vascular tissue and can branch extensively underground, dramatically increasing the surface area available for water absorption."
   },
   {
     id: "cone",
@@ -140,6 +166,7 @@ const GENERATORS = [
     baseCost: 3500,
     baseProduction: 35,
     unlockStage: 4,
+    produces: "light",
     fact: "A pine cone's scales open and close in response to humidity, releasing seeds mainly during dry, windy conditions when they'll travel farthest."
   },
   {
@@ -149,7 +176,19 @@ const GENERATORS = [
     baseCost: 20000,
     baseProduction: 200,
     unlockStage: 5,
+    produces: "light",
+    costWater: 2000,
     fact: "Roughly 80% of flowering plants rely on animal pollinators. This is one of the most successful co-evolutionary partnerships in the history of life."
+  },
+  {
+    id: "transpiration",
+    name: "Transpiration Stream",
+    emoji: "💦",
+    baseCost: 15000,
+    baseProduction: 180,
+    unlockStage: 5,
+    produces: "water",
+    fact: "Transpiration — water evaporating from leaf pores — creates negative pressure that pulls water upward from the roots, sometimes lifting it over 100 meters in tall trees."
   },
   {
     id: "c4",
@@ -158,6 +197,8 @@ const GENERATORS = [
     baseCost: 120000,
     baseProduction: 1100,
     unlockStage: 6,
+    produces: "light",
+    costWater: 12000,
     fact: "C4 photosynthesis concentrates CO2 before fixing it, dramatically reducing water loss. It evolved independently in over 60 plant lineages — a textbook case of convergent evolution."
   },
   {
@@ -167,6 +208,7 @@ const GENERATORS = [
     baseCost: 750000,
     baseProduction: 6000,
     unlockStage: 7,
+    produces: "light",
     fact: "Many grasses spread via rhizomes — underground stems that send up new shoots, letting a single grass plant cover huge areas and recover quickly after being grazed or cut."
   },
   {
@@ -176,6 +218,8 @@ const GENERATORS = [
     baseCost: 4000000,
     baseProduction: 32000,
     unlockStage: 8,
+    produces: "light",
+    costWater: 400000,
     fact: "Pitcher plants use a different carnivory strategy than Venus flytraps — a slippery, nectar-lined tube that insects fall into and can't climb back out of, no movement required."
   },
   {
@@ -185,6 +229,8 @@ const GENERATORS = [
     baseCost: 18000000,
     baseProduction: 150000,
     unlockStage: 9,
+    produces: "light",
+    costWater: 2000000,
     fact: "Mycorrhizal fungal networks can physically connect multiple separate plants underground, sometimes nicknamed the 'Wood Wide Web' — though scientists still debate how much real information transfer happens versus simple nutrient exchange.",
     synergyWith: ["mycorrhizal", "nitrogen_fixing"], // production boosted by these stages being unlocked
     synergyBonusPerStage: 0.25
@@ -196,6 +242,7 @@ const GENERATORS = [
     baseCost: 90000000,
     baseProduction: 750000,
     unlockStage: 10,
+    produces: "light",
     fact: "Root nodules form when Rhizobium bacteria infect legume root hairs, triggering the plant to grow a protective nodule around them — a controlled infection that turns into a nutrient-sharing factory.",
     synergyWith: ["mycorrhizal", "nitrogen_fixing"],
     synergyBonusPerStage: 0.25
@@ -207,9 +254,21 @@ const GENERATORS = [
     baseCost: 450000000,
     baseProduction: 3800000,
     unlockStage: 11,
+    produces: "light",
+    costWater: 50000000,
     fact: "CAM (Crassulacean Acid Metabolism) photosynthesis stores CO2 at night and uses it during the day, the reverse timing of most plants — a direct adaptation to minimize water loss in arid environments.",
     synergyWith: ["carnivorous", "mycorrhizal", "nitrogen_fixing", "extremophile"],
     synergyBonusPerStage: 0.15
+  },
+  {
+    id: "succulent_tissue",
+    name: "Succulent Water Storage",
+    emoji: "🫙",
+    baseCost: 200000000,
+    baseProduction: 1600000,
+    unlockStage: 11,
+    produces: "water",
+    fact: "Succulents store water in specialized tissue in their leaves, stems, or roots, letting them survive long droughts by drawing down internal reserves instead of constantly absorbing from soil."
   }
 ];
 
@@ -311,6 +370,7 @@ const SPECULATIVE_BRANCHES = [
     emoji: "⚗️",
     requiresStage: "nitrogen_fixing",
     cost: 180000000,
+    costWater: 20000000,
     isSpeculative: true,
     description: "WILD SPECULATION: What if a plant evolved an internal organ that fixed atmospheric nitrogen directly, with no bacterial partner needed at all? No known plant does this — it's a genuine biochemical leap beyond anything in nature.",
     effect: "+15% global light production",
@@ -322,6 +382,7 @@ const SPECULATIVE_BRANCHES = [
     emoji: "☢️",
     requiresStage: "extremophile",
     cost: 900000000,
+    costWater: 150000000,
     isSpeculative: true,
     description: "WILD SPECULATION: Some real organisms (like Deinococcus radiodurans bacteria) tolerate extreme radiation. This imagines a plant lineage evolving comparable tolerance — well beyond what any known plant can survive.",
     effect: "+25% global light production",
@@ -329,6 +390,21 @@ const SPECULATIVE_BRANCHES = [
   }
 ];
 
+// Prestige — "Mass Extinction Event"
+// Real framing: Earth has had 5 major mass extinctions; surviving lineages
+// carried forward traits rather than starting from a blank slate.
+// Resets current run (light, water, generators, branches, stage) in exchange
+// for a permanent global production multiplier based on lifetime progress.
+const PRESTIGE_CONFIG = {
+  unlockStage: "flowering", // stage id required before prestige becomes available
+  // Resilience Points earned = floor( (totalLightEarned + totalWaterEarned) ^ exponent / divisor )
+  exponent: 0.5,
+  divisor: 100,
+  // Each Resilience Point grants this much permanent multiplier (additive then applied as +%)
+  multiplierPerPoint: 0.02,
+  fact: "Earth has experienced five major mass extinctions. Each time, surviving plant lineages didn't start over from nothing — they carried forward whatever adaptations let them survive, becoming the seed for everything that followed."
+};
+
 if (typeof module !== "undefined") {
-  module.exports = { STAGES, GENERATORS, SPECULATIVE_BRANCHES };
+  module.exports = { STAGES, GENERATORS, SPECULATIVE_BRANCHES, PRESTIGE_CONFIG };
 }
