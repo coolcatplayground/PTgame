@@ -305,7 +305,8 @@ let state = {
   generators: {},      // id -> count owned
   branchesOwned: {},   // id -> true
   currentStageIndex: 0,
-  lastFactSeen: null
+  lastFactSeen: null,
+  lastSavedAt: Date.now() // used to calculate offline progress on next load
 };
 
 GENERATORS.forEach(g => state.generators[g.id] = 0);
@@ -315,6 +316,7 @@ GENERATORS.forEach(g => state.generators[g.id] = 0);
 // ============================================================
 function saveGame() {
   try {
+    state.lastSavedAt = Date.now();
     localStorage.setItem(SAVE_KEY, JSON.stringify(state));
   } catch (e) {
     console.error("Save failed:", e);
@@ -329,10 +331,28 @@ function loadGame() {
       state = Object.assign(state, loaded);
       // ensure all generator/branch keys exist even if new ones were added since last save
       GENERATORS.forEach(g => { if (!(g.id in state.generators)) state.generators[g.id] = 0; });
+
+      applyOfflineProgress();
     }
   } catch (e) {
     console.error("Load failed:", e);
   }
+}
+
+function applyOfflineProgress() {
+  if (!state.lastSavedAt) return;
+  const now = Date.now();
+  const elapsedSeconds = (now - state.lastSavedAt) / 1000;
+  if (elapsedSeconds <= 0) return;
+
+  const perSecond = getLightPerSecond();
+  if (perSecond > 0) {
+    const earned = perSecond * elapsedSeconds;
+    state.light += earned;
+    state.totalLightEarned += earned;
+    checkStageProgress();
+  }
+  state.lastSavedAt = now;
 }
 
 // ============================================================
@@ -359,10 +379,20 @@ function getGlobalMultiplier() {
   return mult;
 }
 
+function getSynergyMultiplier(gen) {
+  if (!gen.synergyWith) return 1;
+  let unlockedCount = 0;
+  gen.synergyWith.forEach(stageId => {
+    const stageIndex = STAGES.findIndex(s => s.id === stageId);
+    if (state.currentStageIndex >= stageIndex) unlockedCount++;
+  });
+  return 1 + (unlockedCount * gen.synergyBonusPerStage);
+}
+
 function getLightPerSecond() {
   let total = 0;
   GENERATORS.forEach(g => {
-    total += g.baseProduction * state.generators[g.id];
+    total += g.baseProduction * state.generators[g.id] * getSynergyMultiplier(g);
   });
   return total * getGlobalMultiplier();
 }
@@ -473,16 +503,22 @@ function renderGenerators() {
     const cost = getGenCost(gen);
     const owned = state.generators[gen.id];
     const canAfford = state.light >= cost;
+    const synergyMult = getSynergyMultiplier(gen);
+    const effectiveProduction = gen.baseProduction * synergyMult;
 
     const item = document.createElement("div");
     item.className = "gen-item" + (unlocked ? "" : " locked");
+
+    const synergyNote = gen.synergyWith && synergyMult > 1
+      ? ` <span style="color:#5a9c4a;">(synergy ×${synergyMult.toFixed(2)})</span>`
+      : (gen.synergyWith ? ` <span style="color:#8a8a7a;">(synergy grows as you unlock: ${gen.synergyWith.map(id => STAGES.find(s=>s.id===id).name).join(", ")})</span>` : "");
 
     item.innerHTML = `
       <div class="gen-info">
         <div class="gen-emoji">${gen.emoji}</div>
         <div>
           <div class="gen-name">${unlocked ? gen.name : "??? (locked)"}</div>
-          <div class="gen-detail">${unlocked ? `Owned: ${owned} · +${gen.baseProduction}/sec each` : `Reach stage: ${STAGES[gen.unlockStage].name}`}</div>
+          <div class="gen-detail">${unlocked ? `Owned: ${owned} · +${formatNum(effectiveProduction)}/sec each${synergyNote}` : `Reach stage: ${STAGES[gen.unlockStage].name}`}</div>
         </div>
       </div>
       ${unlocked ? `<button class="buy-btn" data-gen="${gen.id}" ${canAfford ? "" : "disabled"}>${formatNum(cost)} ☀️</button>` : ""}
@@ -504,6 +540,11 @@ function renderBranches() {
     const owned = !!state.branchesOwned[branch.id];
     const canAfford = state.light >= branch.cost;
 
+    const tagLabel = branch.description.startsWith("WILD") ? "WILD SPECULATION"
+      : branch.description.startsWith("GROUNDED") ? "GROUNDED SPECULATION"
+      : "SPECULATIVE";
+    const tagColor = tagLabel === "WILD SPECULATION" ? "#d98ca8" : tagLabel === "GROUNDED SPECULATION" ? "#8ab4d9" : "#e8c468";
+
     const item = document.createElement("div");
     item.className = "branch-item" + (unlocked ? "" : " locked");
 
@@ -511,7 +552,7 @@ function renderBranches() {
       <div class="gen-info">
         <div class="gen-emoji">${branch.emoji}</div>
         <div>
-          <span class="branch-tag">SPECULATIVE</span>
+          <span class="branch-tag" style="background:${tagColor};">${tagLabel}</span>
           <div class="gen-name">${unlocked ? branch.name : "??? (locked)"}</div>
           <div class="gen-detail">${unlocked ? branch.description : `Reach stage: ${STAGES[reqStageIndex].name}`}</div>
           ${unlocked ? `<div class="gen-detail"><em>${branch.effect}</em></div>` : ""}
@@ -569,6 +610,7 @@ function tick() {
     checkStageProgress();
     renderTopBar();
   }
+  state.lastSavedAt = Date.now();
 }
 
 // ============================================================
@@ -586,6 +628,15 @@ function init() {
   setInterval(saveGame, 5000);
 
   window.addEventListener("beforeunload", saveGame);
+
+  // When tab regains focus/visibility, the interval may have been throttled
+  // while hidden — catch up on any time that passed since the last tick.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      applyOfflineProgress();
+      renderAll();
+    }
+  });
 }
 
 init();
