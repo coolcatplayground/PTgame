@@ -60,6 +60,46 @@ const STAGES = [
     threshold: 150000,
     fact: "Modern plants show extreme specialization: C4 photosynthesis (like corn) evolved independently dozens of times as a more efficient carbon-fixing pathway in hot, dry climates. Carnivorous plants like Venus flytraps evolved to get nitrogen from prey instead of soil.",
     flavor: "The cutting edge of 400+ million years of plant evolution. Every adaptation here exists for a precise reason."
+  },
+  {
+    id: "grasses",
+    name: "Grasses",
+    emoji: "🌾",
+    threshold: 750000,
+    fact: "Grasses appeared around 70 million years ago and didn't become widespread until roughly 30-40 million years ago. Their growth point sits near the soil rather than the tip, which is why grass survives grazing and mowing — something trees and most other plants can't tolerate.",
+    flavor: "Low, tough, and built to be eaten and bounce back. This lineage will go on to feed most of human civilization."
+  },
+  {
+    id: "carnivorous",
+    name: "Carnivorous Plant",
+    emoji: "🪤",
+    threshold: 3500000,
+    fact: "Carnivorous plants evolved independently at least six separate times. The Venus flytrap's snap-trap leaves close in under a second when trigger hairs are touched twice within about 20 seconds — a safeguard against wasting energy on false alarms like raindrops.",
+    flavor: "When the soil won't give you nitrogen, take it directly from whatever wanders close enough."
+  },
+  {
+    id: "mycorrhizal",
+    name: "Mycorrhizal Partner",
+    emoji: "🍄",
+    threshold: 16000000,
+    fact: "Around 90% of land plant species form mycorrhizal partnerships with fungi. The fungal network extends a plant's effective root reach enormously, trading sugars for water and minerals the fungus is far better at finding.",
+    flavor: "Roots alone were never the whole story. Underground, a fungal network does half the work."
+  },
+  {
+    id: "nitrogen_fixing",
+    name: "Nitrogen-Fixer",
+    emoji: "🫘",
+    threshold: 80000000,
+    fact: "Legumes host nitrogen-fixing bacteria (Rhizobium) in root nodules, converting atmospheric nitrogen gas into a usable form. This is why crop rotation with legumes naturally enriches soil — it's a real partnership farmers have exploited for thousands of years.",
+    flavor: "Why wait for nitrogen to wash into the soil when the air is already 78% nitrogen — if you can just convince a bacterium to share?"
+  },
+  {
+    id: "extremophile",
+    name: "Extremophile Plant",
+    emoji: "🌵",
+    threshold: 400000000,
+    fact: "Desert succulents use CAM photosynthesis, opening their pores only at night to minimize water loss. Some resurrection plants can lose over 95% of their water content and survive, rehydrating and resuming photosynthesis within hours of rain.",
+    flavor: "Heat, drought, frost, salt — the harshest environments on land, and something green still found a way to grow there."
   }
 ];
 
@@ -119,6 +159,57 @@ const GENERATORS = [
     baseProduction: 1100,
     unlockStage: 6,
     fact: "C4 photosynthesis concentrates CO2 before fixing it, dramatically reducing water loss. It evolved independently in over 60 plant lineages — a textbook case of convergent evolution."
+  },
+  {
+    id: "rhizome",
+    name: "Rhizome Spread",
+    emoji: "🌾",
+    baseCost: 750000,
+    baseProduction: 6000,
+    unlockStage: 7,
+    fact: "Many grasses spread via rhizomes — underground stems that send up new shoots, letting a single grass plant cover huge areas and recover quickly after being grazed or cut."
+  },
+  {
+    id: "trap",
+    name: "Snap Trap",
+    emoji: "🪤",
+    baseCost: 4000000,
+    baseProduction: 32000,
+    unlockStage: 8,
+    fact: "Pitcher plants use a different carnivory strategy than Venus flytraps — a slippery, nectar-lined tube that insects fall into and can't climb back out of, no movement required."
+  },
+  {
+    id: "fungal_network",
+    name: "Fungal Network",
+    emoji: "🍄",
+    baseCost: 18000000,
+    baseProduction: 150000,
+    unlockStage: 9,
+    fact: "Mycorrhizal fungal networks can physically connect multiple separate plants underground, sometimes nicknamed the 'Wood Wide Web' — though scientists still debate how much real information transfer happens versus simple nutrient exchange.",
+    synergyWith: ["mycorrhizal", "nitrogen_fixing"], // production boosted by these stages being unlocked
+    synergyBonusPerStage: 0.25
+  },
+  {
+    id: "root_nodule",
+    name: "Root Nodule Colony",
+    emoji: "🫘",
+    baseCost: 90000000,
+    baseProduction: 750000,
+    unlockStage: 10,
+    fact: "Root nodules form when Rhizobium bacteria infect legume root hairs, triggering the plant to grow a protective nodule around them — a controlled infection that turns into a nutrient-sharing factory.",
+    synergyWith: ["mycorrhizal", "nitrogen_fixing"],
+    synergyBonusPerStage: 0.25
+  },
+  {
+    id: "cam_pathway",
+    name: "CAM Photosynthesis",
+    emoji: "🌵",
+    baseCost: 450000000,
+    baseProduction: 3800000,
+    unlockStage: 11,
+    fact: "CAM (Crassulacean Acid Metabolism) photosynthesis stores CO2 at night and uses it during the day, the reverse timing of most plants — a direct adaptation to minimize water loss in arid environments.",
+    synergyWith: ["carnivorous", "mycorrhizal", "nitrogen_fixing", "extremophile"],
+    synergyBonusPerStage: 0.15
   }
 ];
 
@@ -180,6 +271,61 @@ const SPECULATIVE_BRANCHES = [
     description: "SPECULATIVE: A purely imaginative leap beyond today's science — a plant adapted for extreme environments we associate with science fiction (low light, high radiation, minimal water). Pure speculation, not a real prediction.",
     effect: "+20% global light production",
     productionMultiplier: 1.20
+  },
+  {
+    id: "engineered_drought",
+    name: "Engineered Drought-Resistant Lineage",
+    emoji: "🧬",
+    requiresStage: "grasses",
+    cost: 2000000,
+    isSpeculative: true,
+    description: "GROUNDED SPECULATION: Real CRISPR gene-editing research is already underway to enhance drought tolerance in crops. This imagines that work succeeding dramatically sooner and more broadly than current science supports.",
+    effect: "+10% global light production",
+    productionMultiplier: 1.10
+  },
+  {
+    id: "active_trap_swarm",
+    name: "Mobile Trap Swarm",
+    emoji: "🦟",
+    requiresStage: "carnivorous",
+    cost: 10000000,
+    isSpeculative: true,
+    description: "WILD SPECULATION: No real plant can detach and move to hunt. This imagines carnivorous traps evolving limited independent mobility — a leap with no basis in current botany, included purely for fun.",
+    effect: "+15% global light production",
+    productionMultiplier: 1.15
+  },
+  {
+    id: "fungal_communication",
+    name: "Enhanced Fungal Communication Network",
+    emoji: "📡",
+    requiresStage: "mycorrhizal",
+    cost: 40000000,
+    isSpeculative: true,
+    description: "GROUNDED SPECULATION: Real research explores whether mycorrhizal networks let plants share warning signals about pests or drought. This imagines that signaling becoming far more sophisticated and reliable than current evidence shows.",
+    effect: "+12% global light production",
+    productionMultiplier: 1.12
+  },
+  {
+    id: "synthetic_nitrogen_organ",
+    name: "Synthetic Nitrogen Organ",
+    emoji: "⚗️",
+    requiresStage: "nitrogen_fixing",
+    cost: 180000000,
+    isSpeculative: true,
+    description: "WILD SPECULATION: What if a plant evolved an internal organ that fixed atmospheric nitrogen directly, with no bacterial partner needed at all? No known plant does this — it's a genuine biochemical leap beyond anything in nature.",
+    effect: "+15% global light production",
+    productionMultiplier: 1.15
+  },
+  {
+    id: "radiation_tolerant_extremophile",
+    name: "Radiation-Tolerant Extremophile",
+    emoji: "☢️",
+    requiresStage: "extremophile",
+    cost: 900000000,
+    isSpeculative: true,
+    description: "WILD SPECULATION: Some real organisms (like Deinococcus radiodurans bacteria) tolerate extreme radiation. This imagines a plant lineage evolving comparable tolerance — well beyond what any known plant can survive.",
+    effect: "+25% global light production",
+    productionMultiplier: 1.25
   }
 ];
 
